@@ -31,7 +31,7 @@
 | I3 | Information disclosure: operator reads secrets | operator | Mitigated | ClusterRole grants no access to secrets, exec or configmaps. |
 | I4 | Information disclosure: observability credentials | GKE monitoring | Not assessed | Grafana Cloud secret only referenced (`monitoring.yaml:25`). |
 | D1 | DoS: GKE control plane reachable from internet | GKE | Mitigated | `master_authorized_networks_config` with empty default = nodes only (`main.tf:43-55`); CIDR injected at apply time (`variables.tf:54-55`). Endpoint is public but filtered (no private_cluster_config). |
-| D2 | DoS / brute force on EKS API endpoint | EKS | NOT mitigated | `endpoint_public_access=true`, no `public_access_cidrs` (`modules/eks/main.tf:31-32`) = open to 0.0.0.0/0. Fix: set `public_access_cidrs` or private endpoint. |
+| D2 | DoS / brute force on EKS API endpoint | EKS | Mitigated | `public_access_cidrs` has no default and is set at apply time; validation rejects `[]` and `0.0.0.0/0` (eks PR #1, main 63c66aa). Proven by `terraform test` with a mock provider: 3 passed, 0 failed. Residual: endpoint still public (filtered), no private endpoint; eks repo has no CI, the test is run by hand. |
 | D3 | DoS: GPU exhaustion by a single client | vLLM | NOT mitigated | No authn, no rate limits, no quotas. Fix: see Edge section. |
 | D4 | DoS: cost exhaustion | GKE | Partly mitigated | Budget ceiling 100 EUR (project rule); managed Prometheus disabled for cost (`main.tf:27-35`). |
 | E1 | Elevation: operator compromise | operator | Mitigated | Delete only on `vllmservices`; create/patch limited to deployments and services. Residual: patching Deployments can run arbitrary images. Fix: admission policy on image digests. |
@@ -50,7 +50,7 @@ Design for exposure (proposed, not implemented):
 
 ## Priority of fixes
 1. NetworkPolicy default-deny + vLLM API key (S1, I2, R2).
-2. EKS endpoint CIDRs (D2).
+2. Private EKS endpoint or bastion (D2 residual; CIDRs closed by eks PR #1).
 3. Admission policy for E3 residual (T6 closed by ruleset `protect-main`).
 4. vLLM pod securityContext (T5), IRSA (S4).
 5. Edge stack before any public exposure (D3).

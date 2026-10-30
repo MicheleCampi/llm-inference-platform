@@ -23,6 +23,7 @@
 | T3 | Tampering: vLLM image or model swapped | bridge | Partly mitigated | vLLM image pinned by digest (`README.md:14`); model provenance carried as annotations (`bridge/render.py:25,78-82`), not cryptographically verified. Fix: pin model revision hash and verify at load. |
 | T4 | Tampering: container filesystem | operator pod | Mitigated | readOnlyRootFilesystem, runAsNonRoot, no privilege escalation, capabilities dropped (`chart/templates/deployment.yaml:27,56-58`). |
 | T5 | Tampering: vLLM pod hardening | vLLM pods | NOT mitigated | No securityContext on generated pods. Fix: same baseline as the operator, Pod Security Admission `restricted` where GPU allows. |
+| T6 | Tampering: merge to main without CI | GKE repo | NOT mitigated | `main` has no branch protection (API 404); validate and plan are practice, not enforced. Fix: ruleset requiring validate and terraform plan, signed commits, no force-push. |
 | R1 | Repudiation: who changed infra | GKE / CI | Partly mitigated | OIDC identity ties actions to a workflow; GCP audit logs default only. Fix: export Admin Activity logs. |
 | R2 | Repudiation: who sent a prompt | vLLM | NOT mitigated | No authn, so no per-client attribution (see S1). |
 | I1 | Information disclosure: inference API exposed | all | Mitigated (today) | 0 Ingress/Gateway/HTTPRoute/LoadBalancer/NodePort outside `hack/` in all 4 repos (mutation-checked against `hack/`); vLLM Service is ClusterIP (`main.rs:328,353-360`). |
@@ -35,7 +36,7 @@
 | D4 | DoS: cost exhaustion | GKE | Partly mitigated | Budget ceiling 100 EUR (project rule); managed Prometheus disabled for cost (`main.tf:27-35`). |
 | E1 | Elevation: operator compromise | operator | Mitigated | Delete only on `vllmservices`; create/patch limited to deployments and services. Residual: patching Deployments can run arbitrary images. Fix: admission policy on image digests. |
 | E2 | Elevation: cluster-admin by creator | EKS | Partly mitigated | `authentication_mode="API"` but `bootstrap_cluster_creator_admin_permissions=true`. Fix: explicit access entries, drop creator admin. |
-| E3 | Elevation: GitOps deploys anything anywhere | GKE Argo CD | NOT mitigated | Apps live in the `default` AppProject. Fix: restrictive AppProjects (next roadmap item). |
+| E3 | Elevation: GitOps deploys anything anywhere | GKE Argo CD | Partly mitigated | gke PR #12 (main 0da76b9): AppProject `workloads` (operator, alloy, monitoring) limited to 3 repos, namespaces vllm-system and monitoring, 4 cluster kinds (`argocd/apps/projects.yaml`), validated by kubeconform -strict in CI. Residual: ClusterRoleBinding allowed in workloads (needs admission policy); `platform` is cluster-admin by construction; root-app stays in `default`; no live sync (cluster down). |
 
 ## DDoS and the edge
 Today there is no public edge: the platform cannot be attacked at L7 from the internet because nothing is exposed (I1). The control planes are the only internet-facing surface (D1 mitigated, D2 open).
@@ -50,6 +51,6 @@ Design for exposure (proposed, not implemented):
 ## Priority of fixes
 1. NetworkPolicy default-deny + vLLM API key (S1, I2, R2).
 2. EKS endpoint CIDRs (D2).
-3. Restrictive Argo CD AppProjects (E3).
+3. Branch protection on gke main (T6); admission policy for E3 residual.
 4. vLLM pod securityContext (T5), IRSA (S4).
 5. Edge stack before any public exposure (D3).

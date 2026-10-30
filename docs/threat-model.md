@@ -23,7 +23,7 @@
 | T3 | Tampering: vLLM image or model swapped | bridge | Partly mitigated | vLLM image pinned by digest (`README.md:14`); model provenance carried as annotations (`bridge/render.py:25,78-82`), not cryptographically verified. Fix: pin model revision hash and verify at load. |
 | T4 | Tampering: container filesystem | operator pod | Mitigated | readOnlyRootFilesystem, runAsNonRoot, no privilege escalation, capabilities dropped (`chart/templates/deployment.yaml:27,56-58`). |
 | T5 | Tampering: vLLM pod hardening | vLLM pods | NOT mitigated | No securityContext on generated pods. Fix: same baseline as the operator, Pod Security Admission `restricted` where GPU allows. |
-| T6 | Tampering: merge to main without CI | GKE repo | NOT mitigated | `main` has no branch protection (API 404); validate and plan are practice, not enforced. Fix: ruleset requiring validate and terraform plan, signed commits, no force-push. |
+| T6 | Tampering: merge to main without CI | GKE repo | Mitigated | Ruleset `protect-main` (id 26236736, active, verified via `rules/branches/main`): validate required, no force-push, no deletion. Residual: terraform plan not required (needs environment approval, would block every merge); signed commits not required; admin can edit the ruleset; no required review (single maintainer). |
 | R1 | Repudiation: who changed infra | GKE / CI | Partly mitigated | OIDC identity ties actions to a workflow; GCP audit logs default only. Fix: export Admin Activity logs. |
 | R2 | Repudiation: who sent a prompt | vLLM | NOT mitigated | No authn, so no per-client attribution (see S1). |
 | I1 | Information disclosure: inference API exposed | all | Mitigated (today) | 0 Ingress/Gateway/HTTPRoute/LoadBalancer/NodePort outside `hack/` in all 4 repos (mutation-checked against `hack/`); vLLM Service is ClusterIP (`main.rs:328,353-360`). |
@@ -51,6 +51,6 @@ Design for exposure (proposed, not implemented):
 ## Priority of fixes
 1. NetworkPolicy default-deny + vLLM API key (S1, I2, R2).
 2. EKS endpoint CIDRs (D2).
-3. Branch protection on gke main (T6); admission policy for E3 residual.
+3. Admission policy for E3 residual (T6 closed by ruleset `protect-main`).
 4. vLLM pod securityContext (T5), IRSA (S4).
 5. Edge stack before any public exposure (D3).

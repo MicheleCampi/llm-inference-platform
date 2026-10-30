@@ -27,7 +27,7 @@
 | R1 | Repudiation: who changed infra | GKE / CI | Partly mitigated | OIDC identity ties actions to a workflow; GCP audit logs default only. Fix: export Admin Activity logs. |
 | R2 | Repudiation: who sent a prompt | vLLM | NOT mitigated | No authn, so no per-client attribution (see S1). |
 | I1 | Information disclosure: inference API exposed | all | Mitigated (today) | 0 Ingress/Gateway/HTTPRoute/LoadBalancer/NodePort outside `hack/` in all 4 repos (mutation-checked against `hack/`); vLLM Service is ClusterIP (`main.rs:328,353-360`). |
-| I2 | Information disclosure: lateral access inside cluster | all | NOT mitigated | No NetworkPolicy anywhere. Fix: default-deny per namespace, allow only gateway -> vLLM:8000. |
+| I2 | Information disclosure: lateral access inside cluster | all | Mitigated (operator PR #70) | The operator owns a default-deny ingress NetworkPolicy per VllmService (`build_network_policy_with`, operator `src/main.rs`): TCP 8000 is reachable only from same-namespace pods labelled `inference.michelecampi.dev/client=<name>`, from the metrics namespace (`networkPolicy.metricsNamespace`, default `monitoring`), and from namespaces listed in `networkPolicy.extraIngressNamespaces` (default empty: fail-closed). Evidence: unit test plus mutation check (`In` -> `NotIn` fails it); CI job scale-from-zero passes with the policy on through the KEDA HTTP interceptor (namespace `keda` admitted explicitly), and before that fix the same job hung, which shows kindnet enforces the policy. Residual: ingress only, no egress policy; `networkPolicy.enabled=false` in the two CI jobs that reach pods through a NodePort (source is the node IP after kube-proxy SNAT); enforcement on GKE/EKS depends on the CNI and is not verified on a live cluster; other namespaces (Alloy, Argo CD) are not default-denied. |
 | I3 | Information disclosure: operator reads secrets | operator | Mitigated | ClusterRole grants no access to secrets, exec or configmaps. |
 | I4 | Information disclosure: observability credentials | GKE monitoring | Not assessed | Grafana Cloud secret only referenced (`monitoring.yaml:25`). |
 | D1 | DoS: GKE control plane reachable from internet | GKE | Mitigated | `master_authorized_networks_config` with empty default = nodes only (`main.tf:43-55`); CIDR injected at apply time (`variables.tf:54-55`). Endpoint is public but filtered (no private_cluster_config). |
@@ -49,7 +49,7 @@ Design for exposure (proposed, not implemented):
 5. Scale: autoscaling bounded by budget. Unbounded autoscaling turns a DoS into a cost attack (D4).
 
 ## Priority of fixes
-1. NetworkPolicy default-deny + vLLM API key (S1, I2, R2).
+1. vLLM API key from a Secret (S1, R2). I2 closed by the operator's NetworkPolicy (operator PR #70).
 2. Private EKS endpoint or bastion (D2 residual; CIDRs closed by eks PR #1).
 3. Admission policy for E3 residual (T6 closed by ruleset `protect-main`).
 4. vLLM pod securityContext (T5), IRSA (S4).

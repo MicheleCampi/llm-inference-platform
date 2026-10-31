@@ -44,18 +44,36 @@ Each is a decision a platform should take for the team. So I built one: the team
 ## 2. Architecture
 **Git is the only way in; the operator is the only thing that touches GPUs; every team gets its own alert.**
 
-    CONTROL PLANE - changes state, only through Git
-      team YAML (namespace + VllmService) -> PR -> CI checks
-        -> signed release tag -> Argo CD app-of-apps (sync waves)
-        -> namespace per team: quota, LimitRange, default-deny NetworkPolicy
-        -> Rust operator -> vLLM pods on GPU nodes
-           (+ NetworkPolicy per VllmService, API key from a Secret)
-      Terraform (keyless plan, approved apply) -> VPC + GKE or EKS + GPU node pool
-
-    DATA PLANE - serves traffic, inside the cluster only
-      client pod -> KEDA HTTP interceptor (scale from zero)
-        -> vLLM Service (ClusterIP) -> vLLM on GPU (traffic only when warm)
-        -> metrics -> Alloy -> Prometheus -> burn-rate alerts per team
+```mermaid
+flowchart LR
+  subgraph CP["1. Control plane: only through Git"]
+    direction TB
+    T["Team YAML<br/>namespace + VllmService"] --> PR["PR + CI checks"] --> TAG["Signed release tag"] --> ARGO["Argo CD app-of-apps<br/>sync waves, self-heal"]
+    TF["Terraform<br/>keyless plan, approved apply"]
+  end
+  subgraph CL["2. GKE or EKS cluster, GPU node pool"]
+    OP["Rust operator<br/>warm-up, readiness, drain"]
+    KEDA["KEDA HTTP interceptor<br/>namespace keda, scale from zero"]
+    subgraph NS["Namespace per team: quota, LimitRange, default-deny"]
+      CLIENT["Client pod"]
+      SVC["vLLM Service<br/>ClusterIP, API key"]
+      VLLM["vLLM on GPU<br/>traffic only when warm"]
+    end
+  end
+  subgraph OBS["3. Observation"]
+    direction TB
+    ALLOY["Alloy"] --> PROM["Prometheus"] --> ALERT["Burn-rate alerts per team"]
+  end
+  GW["NOT YET: gateway,<br/>per-client key, rate limits"]:::gap
+  CLIENT --> KEDA --> SVC --> VLLM
+  TF --> CL
+  ARGO --> OP
+  ARGO --> NS
+  OP -->|"pods + NetworkPolicy"| VLLM
+  GW -.-> KEDA
+  VLLM -.->|metrics| ALLOY
+  classDef gap stroke-dasharray: 5 5
+```
 
 - **Infrastructure:** Terraform builds network, cluster and GPU pool, on GKE and on EKS.
 - **Delivery:** Argo CD follows a signed release tag; a root app installs the rest in sync waves.

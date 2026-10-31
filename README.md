@@ -1,15 +1,17 @@
 # LLM inference platform
 
-A multi-repo platform for serving large language models on Kubernetes GPUs, built to be
-verified by a stranger: every claim links to code, CI or a recorded measurement.
+A reference platform for serving models on GPUs inside a company: a product team declares
+a model, a latency objective and a budget; the platform provisions, delivers, secures,
+observes and prices it, on GCP or AWS. Every claim is verifiable with a command.
 
 Designed, built and verified under simulated production load, with evidence in CI and one
 measured session on a real NVIDIA L4. It has not served real users.
 
 ## Status
 
-Platform layers: about 35% (10 done, 4 partial, of 34); foundations 22 of 22 (31 October 2026).
-What is missing is listed in [What is not done yet](#what-is-not-done-yet).
+Platform layers: about 43% (12 done, 6 partial, of 35); foundations 22 of 22 (31 October 2026).
+The count is kept in one place, the roadmap; what is missing is listed in
+[What is not done yet](#what-is-not-done-yet).
 
 ## The problem
 
@@ -30,6 +32,16 @@ Serving an LLM is mostly paying for GPUs. Three forces pull against each other:
 
 The repositories are joined by explicit contracts: the operator's Helm chart pinned to a
 release tag, its CRDs, the objective files, and CI tools pinned by SHA-256.
+
+## What a team declares
+
+A team writes one `VllmService`: the model, `objective: {ttftSeconds: 1.0, percentile: 95}`
+and `budget: {eurPerMonth: 500}` ([example](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/teams/demo/qwen-7b.yaml)).
+Values out of range are rejected by the CRD, and a CI negative test proves it. The operator
+(v0.8.0) exports the declared objective and budget as metrics, and the burn-rate alerts page
+each team on its own error budget, `1 - percentile/100`: a p99 team pages where a p90 team
+stays silent, as a promtool unit test in CI shows. Delivered through gke release v0.5.0, a
+signed tag.
 
 ## Repositories
 
@@ -108,7 +120,11 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 - Runbooks, failure-mode analysis and a production readiness review per component are
   on the roadmap, not written.
 - Argo CD and the operator run as single replicas.
-- Teams cannot yet declare their own latency objective and budget; see the [golden path](docs/golden-path.md).
+- Only a 1 s time-to-first-token objective is enforced; any other value raises a ticket alert
+  (`VllmTtftObjectiveUnsupported`) instead of being silently ignored.
+- The declared budget is exported but not yet used: no cost is attributed per team (showback).
+- Teams are not separated yet: no namespace, quota or identity per team. See the
+  [golden path](docs/golden-path.md).
 
 ## This repository
 

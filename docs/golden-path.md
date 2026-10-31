@@ -32,9 +32,11 @@ not hidden.
 7. **Pay.** 4.38 to 8.07 EUR per million generated tokens within the L4 objectives
    (ADR-0025). **Break 3:** cost is per scenario, not attributed to a team (no showback); the declared
    budget is exported as a metric but not yet compared with cost.
-8. **Isolation.** **Break 4:** services share a namespace, one static key per service gives
-   no per-client attribution (R2 in the [threat model](threat-model.md)), and there are no
-   quotas or rate limits (D3). *Next:* namespace, quota and identity per team.
+8. **Isolation.** **Break 4, in part closed:** each team now has its own namespace, a GPU
+   quota, a LimitRange and a deny-all NetworkPolicy, onboarded with one command and checked
+   in CI; not yet in a release or run on a live cluster. Still open: one static key per
+   service gives no per-client attribution (R2 in the [threat model](threat-model.md)),
+   there are no rate limits (D3), and no identity per team. *Next:* identity per team.
 
 Where the breaks go: tenancy (break 4) first, then delivery of team manifests through
 Argo CD (break 1), then a latency threshold per service (break 2), then showback

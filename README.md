@@ -8,7 +8,7 @@ measured session on a real NVIDIA L4. It has not served real users.
 
 ## Status
 
-About 63% of a written 52-item roadmap: 31 items done, 4 partial (31 October 2026).
+Platform layers: about 35% (10 done, 4 partial, of 34); foundations 22 of 22 (31 October 2026).
 What is missing is listed in [What is not done yet](#what-is-not-done-yet).
 
 ## The problem
@@ -108,11 +108,12 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 - Runbooks, failure-mode analysis and a production readiness review per component are
   on the roadmap, not written.
 - Argo CD and the operator run as single replicas.
+- Teams cannot yet declare their own latency objective and budget; see the [golden path](docs/golden-path.md).
 
 ## This repository
 
 - `README.md`: this entry point.
-- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md).
+- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md) and the [golden path](docs/golden-path.md) of a new team.
 - `presentations/`: short guided tours of the platform (coming).
 
 The platform is under active development; what is missing is listed above.

@@ -1,6 +1,6 @@
 # LLM inference platform
 
-[0 Why](#0-why-this-platform-exists) · [1 What a team can do](#1-what-a-team-can-do) · [2 Architecture](#2-architecture) · [3 Terraform, Helm, Kubernetes](#3-terraform-helm-and-kubernetes-where-and-how) · [4 Status](#4-status-by-layer) · [5 Decisions](#5-decisions) · [6 Checks](#6-how-every-claim-is-checked) · [7 Gaps](#7-known-gaps) · [8 Path](#8-path-to-production)
+[0 Why](#0-why-this-platform-exists) · [1 What a team can do](#1-what-a-team-can-do) · [2 Architecture](#2-architecture) · [3 Terraform, Helm, Argo CD, Kubernetes](#3-terraform-helm-argo-cd-and-kubernetes-where-and-how) · [4 Status](#4-status-by-layer) · [5 Decisions](#5-decisions) · [6 Checks](#6-how-every-claim-is-checked) · [7 Gaps](#7-known-gaps) · [8 Path](#8-path-to-production)
 
 *Designed, built and verified under simulated production load; evidence in CI. It has not served real users.*
 
@@ -54,17 +54,19 @@ Each is a decision a platform should take for the team. So I built one: the team
 - **Control:** a Rust operator turns a VllmService into pods, warm-up, readiness and drain.
 - **Observation:** Alloy ships the metrics; Prometheus evaluates each team's error budget.
 
-## 3. Terraform, Helm and Kubernetes: where and how
-**The three tools, the files that use them, and how each one is checked.**
+## 3. Terraform, Helm, Argo CD and Kubernetes: where and how
+**One row per layer: the file to start reading, what it does, why, and how CI checks it.**
 
-| | Where | What it does | Why this way | Check |
+| | Start reading at | What it does | Why this way | Check |
 |---|---|---|---|---|
-| Terraform, GKE | [gke](https://github.com/MicheleCampi/gke-llm-inference-platform) `terraform/` | APIs, VPC, subnet, module `gke_gpu` (cluster, GPU pool) | reviewable, reproducible infrastructure | plan in CI |
-| Terraform, CI identity | gke `bootstrap/ci-identity/` | Workload Identity pool and provider for GitHub, plan-only service account, read on state | no long-lived keys; CI plans, never applies | plan workflow, approval required |
-| Terraform, EKS | [eks](https://github.com/MicheleCampi/eks-llm-inference-platform) | modules `vpc` and `eks` | the design is not tied to one cloud | `terraform validate` |
-| Helm | [operator](https://github.com/MicheleCampi/vllm-coldstart-operator) `chart/` | operator, CRD and values as one versioned chart | one unit for Argo CD to install | `helm template` |
-| Argo CD | gke `argocd/` | root app and apps for operator, monitoring, Alloy, secrets, projects, team | the cluster changes only from Git | sync status |
-| Kubernetes | operator, CRD generated from Rust (`src/bin/crdgen.rs`) | VllmService with objective and budget; warm readiness; drain after replacement | the team speaks in models, not pods | `bash ci/validate.sh` in gke |
+| Terraform, GKE | gke [`terraform/main.tf`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/terraform/main.tf) -> [`modules/gke-gpu/main.tf`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/terraform/modules/gke-gpu/main.tf) | APIs, VPC, subnet; regional cluster, system pool, L4 pool 0..1, Workload Identity, Dataplane V2 | reviewable, reproducible; the cluster in one module | `terraform validate`, trivy (an obsolete exception fails CI), plan in CI |
+| Terraform, CI identity | gke [`bootstrap/ci-identity/main.tf`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/bootstrap/ci-identity/main.tf) | Workload Identity pool and provider for GitHub, plan-only service account | no long-lived keys; CI plans, never applies | plan job behind an approval |
+| Terraform, EKS | [eks](https://github.com/MicheleCampi/eks-llm-inference-platform), modules `vpc` and `eks` | the same platform on AWS | not tied to one cloud | `terraform validate` |
+| Helm, written | operator [`chart/`](https://github.com/MicheleCampi/vllm-coldstart-operator/tree/main/chart) | operator, CRD and values as one versioned chart | one unit for Argo CD to install | `helm template` |
+| Helm, consumed | gke [`argocd/apps/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/argocd/apps) | argo-cd 9.5.21, external-secrets 2.6.0, alloy 1.10.0, each version pinned | an upgrade is a reviewed diff | version in Git |
+| Argo CD | gke [`argocd/root-app.yaml`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/argocd/root-app.yaml) | root app at tag v0.5.0 installs `argocd/apps/` in sync waves: -2 root; -1 projects, argo-cd, secrets; 0 monitoring, operator; 1 alloy. One AppProject per role and per team | the cluster changes only from Git, in a stated order | sync status |
+| Kubernetes, API | operator [`src/bin/crdgen.rs`](https://github.com/MicheleCampi/vllm-coldstart-operator/blob/main/src/bin/crdgen.rs) | VllmService with objective and budget; the operator owns its Deployment, Service and NetworkPolicy | the team speaks in models, not pods | gke [`ci/validate.sh`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/validate.sh): kubeconform with CRD schemas, negative tests |
+| Kubernetes, tenancy | gke [`tenants/demo/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/tenants/demo), [`ci/new-team.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/new-team.py) | Namespace, ResourceQuota, LimitRange and deny-all NetworkPolicy per team | onboarding is one command | [`ci/check-tenancy.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/check-tenancy.py) in CI |
 
 ## 4. Status by layer
 **~43%: 12 capabilities done and 6 partial, out of 35. The unknowns were done first; what remains is known engineering.**

@@ -44,10 +44,21 @@ Each is a decision a platform should take for the team. So I built one: the team
 ## 2. Architecture
 **Git is the only way in; the operator is the only thing that touches GPUs; every team gets its own alert.**
 
-    team YAML -> signed tag -> Argo CD (app-of-apps)
-      -> Rust operator -> vLLM pods on GPU nodes (traffic only when warm)
-      -> metrics -> Alloy -> Prometheus -> burn-rate alerts per team
-    Terraform (keyless plan, approved) -> VPC + GKE or EKS + GPU node pool
+    CONTROL PLANE - changes state, only through Git
+      team YAML (namespace + VllmService) -> PR -> CI checks
+        -> signed release tag -> Argo CD app-of-apps (sync waves)
+        -> namespace per team: quota, LimitRange, default-deny NetworkPolicy
+        -> Rust operator -> vLLM pods on GPU nodes
+           (+ NetworkPolicy per VllmService, API key from a Secret)
+      Terraform (keyless plan, approved apply) -> VPC + GKE or EKS + GPU node pool
+
+    DATA PLANE - serves traffic, inside the cluster only
+      client pod -> KEDA HTTP interceptor (scale from zero)
+        -> vLLM Service (ClusterIP) -> vLLM on GPU (traffic only when warm)
+        -> metrics -> Alloy -> Prometheus -> burn-rate alerts per team
+
+    NOT YET: no gateway or external endpoint, no per-client key (R2),
+             no rate limits (D3), no identity per team, tenancy not applied live
 
 - **Infrastructure:** Terraform builds network, cluster and GPU pool, on GKE and on EKS.
 - **Delivery:** Argo CD follows a signed release tag; a root app installs the rest in sync waves.

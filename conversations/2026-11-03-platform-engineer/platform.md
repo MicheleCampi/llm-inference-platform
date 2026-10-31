@@ -45,33 +45,30 @@ Each is a decision a platform should take for the team. So I built one: the team
 **Git is the only way in; the operator is the only thing that touches GPUs; every team gets its own alert.**
 
 ```mermaid
-flowchart TB
-  subgraph CP["1. Control plane: state changes only through Git"]
-    direction LR
+flowchart LR
+  subgraph CP["1. Control plane: only through Git"]
+    direction TB
     T["Team YAML<br/>namespace + VllmService"] --> PR["PR + CI checks"] --> TAG["Signed release tag"] --> ARGO["Argo CD app-of-apps<br/>sync waves, self-heal"]
     TF["Terraform<br/>keyless plan, approved apply"]
   end
   subgraph CL["2. GKE or EKS cluster, GPU node pool"]
-    direction LR
-    GW["NOT YET: gateway,<br/>per-client key, rate limits"]:::gap
     OP["Rust operator<br/>warm-up, readiness, drain"]
-    subgraph KNS["Namespace keda"]
-      KEDA["KEDA HTTP interceptor<br/>scale from zero"]
-    end
+    KEDA["KEDA HTTP interceptor<br/>namespace keda, scale from zero"]
     subgraph NS["Namespace per team: quota, LimitRange, default-deny"]
-      direction LR
       CLIENT["Client pod"]
-      SVC["vLLM Service<br/>ClusterIP, API key"] --> VLLM["vLLM on GPU<br/>traffic only when warm"]
+      SVC["vLLM Service<br/>ClusterIP, API key"]
+      VLLM["vLLM on GPU<br/>traffic only when warm"]
     end
   end
   subgraph OBS["3. Observation"]
-    direction LR
+    direction TB
     ALLOY["Alloy"] --> PROM["Prometheus"] --> ALERT["Burn-rate alerts per team"]
   end
+  GW["NOT YET: gateway,<br/>per-client key, rate limits"]:::gap
+  CLIENT --> KEDA --> SVC --> VLLM
   TF --> CL
   ARGO --> OP
   ARGO --> NS
-  CLIENT --> KEDA --> SVC
   OP -->|"pods + NetworkPolicy"| VLLM
   GW -.-> KEDA
   VLLM -.->|metrics| ALLOY

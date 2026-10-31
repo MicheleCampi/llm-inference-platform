@@ -22,7 +22,7 @@
 | T2 | Tampering: CI inputs or base images drift | operator | Mitigated | Inputs pinned by digest (`ci.yml:18-37`); CI rejects unpinned Dockerfile frontend/builder (`ci.yml:93-94`). |
 | T3 | Tampering: vLLM image or model swapped | bridge | Partly mitigated | vLLM image pinned by digest (`README.md:14`); model provenance carried as annotations (`bridge/render.py:25,78-82`), not cryptographically verified. Fix: pin model revision hash and verify at load. |
 | T4 | Tampering: container filesystem | operator pod | Mitigated | readOnlyRootFilesystem, runAsNonRoot, no privilege escalation, capabilities dropped (`chart/templates/deployment.yaml:27,56-58`). |
-| T5 | Tampering: vLLM pod hardening | vLLM pods | NOT mitigated | No securityContext on generated pods. Fix: same baseline as the operator, Pod Security Admission `restricted` where GPU allows. |
+| T5 | Tampering: vLLM pod hardening | vLLM pods | Partially mitigated (operator PR #72) | Every generated container sets `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault`; unit test `container_is_hardened` with mutation check, e2e on kind runs with it. Residual: not PSA `restricted`: `runAsNonRoot` unset because vllm/vllm-openai runs as root; root filesystem writable (vLLM caches). Fix: non-root image + optional `runAsUser` in the spec, `emptyDir` caches, `readOnlyRootFilesystem`. |
 | T6 | Tampering: merge to main without CI | GKE repo | Mitigated | Ruleset `protect-main` (id 26236736, active, verified via `rules/branches/main`): validate required, no force-push, no deletion. Residual: terraform plan not required (needs environment approval, would block every merge); signed commits not required; admin can edit the ruleset; no required review (single maintainer). |
 | R1 | Repudiation: who changed infra | GKE / CI | Partly mitigated | OIDC identity ties actions to a workflow; GCP audit logs default only. Fix: export Admin Activity logs. |
 | R2 | Repudiation: who sent a prompt | vLLM | NOT mitigated | Only one shared static key per service (S1, operator PR #71), so no per-client attribution. |
@@ -31,7 +31,7 @@
 | I3 | Information disclosure: operator reads secrets | operator | Mitigated | ClusterRole grants no access to secrets, exec or configmaps. |
 | I4 | Information disclosure: observability credentials | GKE monitoring | Not assessed | Grafana Cloud secret only referenced (`monitoring.yaml:25`). |
 | D1 | DoS: GKE control plane reachable from internet | GKE | Mitigated | `master_authorized_networks_config` with empty default = nodes only (`main.tf:43-55`); CIDR injected at apply time (`variables.tf:54-55`). Endpoint is public but filtered (no private_cluster_config). |
-| D2 | DoS / brute force on EKS API endpoint | EKS | Mitigated | `public_access_cidrs` has no default and is set at apply time; validation rejects `[]` and `0.0.0.0/0` (eks PR #1, main 63c66aa). Proven by `terraform test` with a mock provider: 3 passed, 0 failed. Residual: endpoint still public (filtered), no private endpoint; eks repo has no CI, the test is run by hand. |
+| D2 | DoS / brute force on EKS API endpoint | EKS | Mitigated | `public_access_cidrs` has no default and is set at apply time; validation rejects `[]` and `0.0.0.0/0` (eks PR #1, main 63c66aa). Proven by `terraform test` with a mock provider: 3 passed, 0 failed. Residual: endpoint still public (filtered), no private endpoint; `terraform test` runs in eks CI on every push and PR (eks PR #2, main 91579db). |
 | D3 | DoS: GPU exhaustion by a single client | vLLM | NOT mitigated | One shared key per service (S1) keeps out callers without it, but there are no rate limits and no quotas. Fix: see Edge section. |
 | D4 | DoS: cost exhaustion | GKE | Partly mitigated | Budget ceiling 100 EUR (project rule); managed Prometheus disabled for cost (`main.tf:27-35`). |
 | E1 | Elevation: operator compromise | operator | Mitigated | Delete only on `vllmservices`; create/patch limited to deployments and services. Residual: patching Deployments can run arbitrary images. Fix: admission policy on image digests. |
@@ -52,5 +52,5 @@ Design for exposure (proposed, not implemented):
 1. Per-client identity for vLLM (R2). S1 closed by the vLLM API key from a Secret (operator PR #71); I2 closed by the operator's NetworkPolicy (operator PR #70).
 2. Private EKS endpoint or bastion (D2 residual; CIDRs closed by eks PR #1).
 3. Admission policy for E3 residual (T6 closed by ruleset `protect-main`).
-4. vLLM pod securityContext (T5), IRSA (S4).
+4. Non-root vLLM image + `runAsNonRoot` (T5 residual), IRSA (S4).
 5. Edge stack before any public exposure (D3).

@@ -8,7 +8,7 @@ measured session on a real NVIDIA L4. It has not served real users.
 
 ## Status
 
-About 60% of a written 52-item roadmap: 29 items done, 4 partial (30 October 2026).
+About 63% of a written 52-item roadmap: 31 items done, 4 partial (31 October 2026).
 What is missing is listed in [What is not done yet](#what-is-not-done-yet).
 
 ## The problem
@@ -76,24 +76,43 @@ Narrative:
 - **Envelope:** the load simulator is calibrated to one L4's medians, not its tails
   (ADR-0024). It proves the control plane and the logic, not GPU capacity.
 
+## Security posture
+
+A STRIDE [threat model](docs/threat-model.md) covers 23 threats: 13 mitigated, 6 partly
+mitigated, 3 not mitigated, 1 not yet assessed. Each row states its status and residual
+risk, and the document ends with a prioritised list of what to close next.
+
+Open items, as named in the threat model:
+
+- S4, not mitigated: EKS workloads use the node IAM role. Next: IRSA per service account (priority 4).
+- R2, not mitigated: one shared static key per vLLM service, so no per-client attribution.
+  Next: per-client identity (priority 1).
+- D3, not mitigated: no rate limits or quotas, so one client can exhaust the GPU.
+  Next: edge stack before any public exposure (priority 5).
+- I4, not assessed: the Grafana Cloud secret is only referenced; its handling is not yet reviewed.
+
+Last reviewed 31 October 2026; the threat model is reviewed on every security-relevant PR, and
+CI fails if the counts above stop matching it.
+
 ## How to verify it yourself
 
 Start from the operator's CI: eleven checks on kind clusters, including faults under load,
 preemption, scale to zero with KEDA, and load replayed from a public production trace.
-Every ADR states its evidence. The GKE repository runs a keyless Terraform plan in CI.
+Every ADR states its evidence. The GKE repository runs a keyless Terraform plan in CI;
+the EKS repository runs `terraform test` in CI with the same pinned tools.
 
 ## What is not done yet
 
 - One region, one cloud in operation; GKE and EKS are still two separate definitions.
 - No real traffic; no DDoS or edge protection in front of the service yet.
-- Threat model, runbooks, failure-mode analysis and production readiness review per
-  component are on the roadmap, not written.
+- Runbooks, failure-mode analysis and a production readiness review per component are
+  on the roadmap, not written.
 - Argo CD and the operator run as single replicas.
 
 ## This repository
 
 - `README.md`: this entry point.
-- `docs/`: the full platform documentation (coming).
+- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md).
 - `presentations/`: short guided tours of the platform (coming).
 
-This repository and the platform are under construction.
+The platform is under active development; what is missing is listed above.

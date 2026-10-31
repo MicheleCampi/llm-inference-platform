@@ -57,13 +57,23 @@ Each is a decision a platform should take for the team. So I built one: the team
         -> vLLM Service (ClusterIP) -> vLLM on GPU (traffic only when warm)
         -> metrics -> Alloy -> Prometheus -> burn-rate alerts per team
 
-    NOT YET: no gateway or external endpoint, no per-client key (R2),
-             no rate limits (D3), no identity per team, tenancy not applied live
-
 - **Infrastructure:** Terraform builds network, cluster and GPU pool, on GKE and on EKS.
 - **Delivery:** Argo CD follows a signed release tag; a root app installs the rest in sync waves.
 - **Control:** a Rust operator turns a VllmService into pods, warm-up, readiness and drain.
 - **Observation:** Alloy ships the metrics; Prometheus evaluates each team's error budget.
+
+**If it breaks.** What the design does, and where to check it.
+
+| Failure | What happens | Evidence |
+|---|---|---|
+| Someone changes the cluster by hand | Argo CD puts it back as in Git (auto-sync, prune, self-heal) | `argocd/root-app.yaml`, GKE repo |
+| A GPU node is drained or preempted | The replica leaves the Service 30 s before it stops; responses in flight finish; it moves to another node | ADR-0019; CI drain and preemption job, operator repo |
+| A reconcile hangs | It fails after 30 s and is counted in `vcso_reconcile_failures_total` | Operator CHANGELOG |
+| The model gets slow, or its metrics disappear | Burn-rate alerts on time to first token, a target-down alert, a runbook | ADR-0021; `docs/runbooks/ttft-burn-rate.md`, operator repo |
+| Docker Hub is down | Builds take base images from mirror.gcr.io | Operator CHANGELOG |
+| Argo CD or the operator stops | Running pods keep serving; nothing new lands until it is back | Kubernetes behaviour; not tested live here |
+
+**Not yet:** no gateway or external endpoint, no per-client key (R2), no rate limits (D3), no identity per team, tenancy not applied live.
 
 ## 3. Terraform, Helm, Argo CD and Kubernetes: where and how
 **One row per layer: the file to start reading, what it does, why, and how CI checks it.**

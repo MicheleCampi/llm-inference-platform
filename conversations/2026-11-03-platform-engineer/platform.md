@@ -37,9 +37,9 @@ Each is a decision a platform should take for the team. So I built one: the team
 | scales to zero and wakes on demand | yes, on kind (ADR-0015) | tested on GPU |
 | is paged on its own error budget | yes, for a 1 s objective (ADR-0021) | any objective |
 | sees its spend against its budget | budget exported; cost per run (ADR-0025) | cost per team (showback) |
-| shares the cluster safely with other teams | no | namespace, quota, identity per team |
+| is onboarded with one command into its own namespace: GPU quota, default-deny network, boundaries checked in CI | in Git and CI ([#19](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/19), [#20](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/20)); not yet run live | identity per team |
 
-**Today it serves one team well. Making it safe for many teams is step 1 of the path.**
+**Teams are isolated in Git and checked by CI. Proving it on a live cluster, and identity per team, are step 1 of the path.**
 
 ## 2. Architecture
 **Git is the only way in; the operator is the only thing that touches GPUs; every team gets its own alert.**
@@ -108,13 +108,13 @@ ADRs: [vllm-coldstart-operator/docs/adr](https://github.com/MicheleCampi/vllm-co
 **Written down before anyone finds them.**
 - Only a 1 s latency objective is evaluated; others raise a ticket alert.
 - No showback: the budget is exported but not compared with cost.
-- No tenancy: one team per cluster is safe today.
+- Tenancy is written and checked, not yet run live; no identity per team (needs Google Groups for RBAC).
 - Terraform apply is manual, from an approved plan.
 - Single region; no edge or DDoS layer. These are design answers, not code.
 
 ## 8. Path to production
 **In order; each step closes a row of section 4.**
-1. Tenancy: namespace, quota and identity per team.
+1. Tenancy live: verify isolation on the cluster, add identity per team, then onboarding as an ApplicationSet over a team chart, so a team is one values file.
 2. Showback: projected cost per team against its budget, alert before overrun.
 3. Any latency objective, not only 1 s.
 4. Apply from CI with approval; model delivery by Argo CD.

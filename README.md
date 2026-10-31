@@ -43,6 +43,10 @@ each team on its own error budget, `1 - percentile/100`: a p99 team pages where 
 stays silent, as a promtool unit test in CI shows. Delivered through gke release v0.5.0, a
 signed tag.
 
+A new team is onboarded with one command (`ci/new-team.py`) and one pull request: its own
+namespace, GPU quota, LimitRange and a deny-all NetworkPolicy, checked in CI. This is on gke
+`main`, not yet in a release or run on a live cluster.
+
 ## Repositories
 
 Platform core:
@@ -123,8 +127,8 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 - Only a 1 s time-to-first-token objective is enforced; any other value raises a ticket alert
   (`VllmTtftObjectiveUnsupported`) instead of being silently ignored.
 - The declared budget is exported but not yet used: no cost is attributed per team (showback).
-- Teams are not separated yet: no namespace, quota or identity per team. See the
-  [golden path](docs/golden-path.md).
+- No identity per team yet: namespaces, quotas and network policy are in place, but access is
+  not separated per team. See the [golden path](docs/golden-path.md).
 
 ## This repository
 

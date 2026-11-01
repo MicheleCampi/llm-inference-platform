@@ -85,7 +85,7 @@ flowchart LR
 | Failure | What happens | Evidence |
 |---|---|---|
 | Someone changes the cluster by hand | Argo CD puts it back as in Git (auto-sync, prune, self-heal) | `argocd/root-app.yaml`, GKE repo |
-| A GPU node is drained or preempted | The replica leaves the Service 30 s before it stops; responses in flight finish; it moves to another node | ADR-0019; CI drain and preemption job, operator repo |
+| A GPU node is drained or preempted | The replica leaves the Service 110 s before it stops; responses in flight finish; it moves to another node | ADR-0019; CI drain and preemption job, operator repo |
 | A reconcile hangs | It fails after 30 s and is counted in `vcso_reconcile_failures_total` | Operator CHANGELOG |
 | The model gets slow, or its metrics disappear | Burn-rate alerts on time to first token, a target-down alert, a runbook | ADR-0021; `docs/runbooks/ttft-burn-rate.md`, operator repo |
 | Docker Hub is down | Builds take base images from mirror.gcr.io | Operator CHANGELOG |

@@ -7,9 +7,11 @@ observes and prices it, on GCP or AWS. Every claim is verifiable with a command.
 Designed, built and verified under simulated production load, with evidence in CI and one
 measured session on a real NVIDIA L4. It has not served real users.
 
+The full write-up, with architecture, numbers and limits: [platform.md](conversations/2026-11-03-platform-engineer/platform.md).
+
 ## Status
 
-Platform layers: about 43% (12 done, 6 partial, of 35); foundations 22 of 22 (31 October 2026).
+Platform layers: about 46% (12 done, 8 partial, of 35); foundations 22 of 22 (1 November 2026).
 The count is kept in one place, the roadmap; what is missing is listed in
 [What is not done yet](#what-is-not-done-yet).
 
@@ -23,7 +25,7 @@ Serving an LLM is mostly paying for GPUs. Three forces pull against each other:
 
 ## How it fits together
 
-    Terraform (remote state, keyless plan in CI)
+    Terraform (remote state, keyless plan in CI; apply from CI wired, not yet run)
       -> GKE: CPU system pool + L4 GPU pool that scales 0..1, Workload Identity
         -> Argo CD (app of apps, sync waves): External Secrets, monitoring, operator, Alloy
           -> vllm-coldstart-operator: VllmService -> Deployment + Service + status
@@ -40,12 +42,12 @@ and `budget: {eurPerMonth: 500}` ([example](https://github.com/MicheleCampi/gke-
 Values out of range are rejected by the CRD, and a CI negative test proves it. The operator
 (v0.8.0) exports the declared objective and budget as metrics, and the burn-rate alerts page
 each team on its own error budget, `1 - percentile/100`: a p99 team pages where a p90 team
-stays silent, as a promtool unit test in CI shows. Delivered through gke release v0.5.0, a
+stays silent, as a promtool unit test in CI shows. Delivered through gke release v0.6.0, a
 signed tag.
 
 A new team is onboarded with one command (`ci/new-team.py`) and one pull request: its own
-namespace, GPU quota, LimitRange and a deny-all NetworkPolicy, checked in CI. This is on gke
-`main`, not yet in a release or run on a live cluster.
+namespace, GPU quota, LimitRange and a deny-all NetworkPolicy, checked in CI. This is in gke
+release v0.6.0, not yet run on a live cluster.
 
 ## Repositories
 
@@ -114,12 +116,15 @@ CI fails if the counts above stop matching it.
 
 Start from the operator's CI: eleven checks on kind clusters, including faults under load,
 preemption, scale to zero with KEDA, and load replayed from a public production trace.
-Every ADR states its evidence. The GKE repository runs a keyless Terraform plan in CI;
+Every ADR states its evidence. The GKE repository runs a keyless Terraform plan in CI, and apply from CI as a second
+identity, main only, behind a reviewer (wired, not yet exercised);
 the EKS repository runs `terraform test` in CI with the same pinned tools.
 
 ## What is not done yet
 
 - One region, one cloud in operation; GKE and EKS are still two separate definitions.
+- Upgrade and disaster recovery are written down ([gke docs](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md)),
+  not drilled: no maintenance window, no measured recovery time.
 - No real traffic; no DDoS or edge protection in front of the service yet.
 - Runbooks, failure-mode analysis and a production readiness review per component are
   on the roadmap, not written.
@@ -133,6 +138,7 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 ## This repository
 
 - `README.md`: this entry point.
+- `conversations/`: [platform.md](conversations/2026-11-03-platform-engineer/platform.md), the full write-up of the platform.
 - `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md) and the [golden path](docs/golden-path.md) of a new team.
 - `presentations/`: short guided tours of the platform (coming).
 

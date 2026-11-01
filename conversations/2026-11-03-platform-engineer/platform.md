@@ -124,7 +124,7 @@ Underneath, Terraform has already built network, cluster and GPU pool: keyless p
 
 **Terraform.** Plan in CI with a keyless identity federated from GitHub; the CI service account can only plan. State in a GCS backend, which locks natively. Apply is a human step on an approved plan.
 
-**Argo CD.** Bootstrapped once by hand: install the argo-cd chart, add a read-only deploy key, apply `root-app.yaml`. That is the only manual apply. From there Argo CD manages itself with the same pinned chart, and Terraform never touches it. It follows a signed tag, not a branch, so rollback is going back one tag. Self-heal puts back manual changes; prune removes what left Git.
+**Argo CD.** Bootstrapped once by hand: install the argo-cd chart, apply `root-app.yaml`; it reads the public repo over HTTPS, so there is no secret to bootstrap. That is the only manual apply. From there Argo CD manages itself with the same pinned chart, and Terraform never touches it. It follows a signed tag, not a branch, so rollback is going back one tag. Self-heal puts back manual changes; prune removes what left Git.
 
 **Helm.** I write one chart (the operator, its CRD and values) and consume three, each pinned. A chart version is a dependency: bumped in a PR, rendered with `helm template` in CI before Argo CD sees it. Nobody runs `helm install` after bootstrap.
 
@@ -242,7 +242,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **How do you know what it costs?** A cost model calibrated on a real L4 measurement: about 4.38 to 8.07 EUR per million generated tokens within SLO. Per scenario today; per team is next.
 
-**How do you bootstrap Argo CD itself?** Once, by hand, and documented: install the pinned chart, add a read-only deploy key, apply the root app. From there Argo CD manages itself. The Workload Identity binding external-secrets uses is now in Terraform, adopted with an import that planned 0 to change (gke #23, #24); the deploy key is the one piece still outside Git.
+**How do you bootstrap Argo CD itself?** Once, by hand, and documented: install the pinned chart, apply the root app. From there Argo CD manages itself. Nothing in the bootstrap is a secret: the repo is public and read over HTTPS, so the deploy key is gone (gke #25); a private repo would use a GitHub App, its key in Secret Manager via external-secrets. The Workload Identity binding external-secrets uses is in Terraform, adopted with an import that planned 0 to change (gke #23, #24).
 
 **What is your single point of failure?** The system pool: one small node in one zone, chosen to keep the lab cheap. If it goes, Argo CD, the operator and monitoring go with it. For production: three zones, at least one node per zone, one Terraform variable.
 

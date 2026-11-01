@@ -242,7 +242,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **How do you know what it costs?** A cost model calibrated on a real L4 measurement: about 4.38 to 8.07 EUR per million generated tokens within SLO. Per scenario today; per team is next.
 
-**How do you bootstrap Argo CD itself?** Once, by hand, and documented: install the pinned chart, add a read-only deploy key, apply the root app. From there Argo CD manages itself. Two pieces still live outside Git, the Workload Identity binding and the deploy key; they belong in Terraform.
+**How do you bootstrap Argo CD itself?** Once, by hand, and documented: install the pinned chart, add a read-only deploy key, apply the root app. From there Argo CD manages itself. The Workload Identity binding external-secrets uses is now in Terraform, adopted with an import that planned 0 to change (gke #23, #24); the deploy key is the one piece still outside Git.
 
 **What is your single point of failure?** The system pool: one small node in one zone, chosen to keep the lab cheap. If it goes, Argo CD, the operator and monitoring go with it. For production: three zones, at least one node per zone, one Terraform variable.
 

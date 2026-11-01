@@ -118,7 +118,7 @@ Underneath, Terraform has already built network, cluster and GPU pool: keyless p
 | Terraform, EKS | [eks](https://github.com/MicheleCampi/eks-llm-inference-platform), modules `vpc` and `eks` | the same platform on AWS | not tied to one cloud | `terraform validate` |
 | Helm, written | operator [`chart/`](https://github.com/MicheleCampi/vllm-coldstart-operator/tree/main/chart) | operator, CRD and values as one versioned chart | one unit for Argo CD to install | `helm template` |
 | Helm, consumed | gke [`argocd/apps/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/argocd/apps) | argo-cd 9.5.21, external-secrets 2.6.0, alloy 1.10.0, each version pinned | an upgrade is a reviewed diff | version in Git |
-| Argo CD | gke [`argocd/root-app.yaml`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/argocd/root-app.yaml) | root app at tag v0.5.0 installs `argocd/apps/` in sync waves: -2 root; -1 projects, argo-cd, external-secrets; 0 monitoring, operator; 1 alloy. Each team app (team-demo, team-b) syncs in three steps: -1, 0, 1. One AppProject per role and per team | the cluster changes only from Git, in a stated order | sync status |
+| Argo CD | gke [`argocd/root-app.yaml`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/argocd/root-app.yaml) | root app at tag v0.6.0 installs `argocd/apps/` in sync waves: -2 root; -1 projects, argo-cd, external-secrets; 0 monitoring, operator; 1 alloy. Each team app (team-demo, team-b) syncs in three steps: -1, 0, 1. One AppProject per role and per team | the cluster changes only from Git, in a stated order | sync status |
 | Kubernetes, API | operator [`src/bin/crdgen.rs`](https://github.com/MicheleCampi/vllm-coldstart-operator/blob/main/src/bin/crdgen.rs) | VllmService with objective and budget; the operator owns its Deployment, Service and NetworkPolicy | the team speaks in models, not pods | gke [`ci/validate.sh`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/validate.sh): kubeconform with CRD schemas, negative tests |
 | Kubernetes, tenancy | gke [`tenants/demo/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/tenants/demo), [`ci/new-team.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/new-team.py) | Namespace, ResourceQuota, LimitRange and deny-all NetworkPolicy per team | onboarding is one command | [`ci/check-tenancy.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/check-tenancy.py) in CI |
 
@@ -185,7 +185,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **The biggest gaps are on the operating side:**
 - No runbooks or failure-mode analysis for the failures already tested; no written error-budget policy; no SLO on time per output token or on request success.
-- No production readiness review per component; no upgrade or disaster-recovery plan.
+- No production readiness review per component; upgrade and DR written down (gke [`docs/upgrade-and-dr.md`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md)), not drilled: no maintenance window, no measured RTO, one region.
 
 **On the product side:**
 - Model delivery is not wired: the bridge produces the manifest of a promoted model, but Argo CD does not pick it up yet.
@@ -219,7 +219,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 5. Scale to zero tested on GPU, with the NetworkPolicy rule for KEDA; a load test at target traffic.
 
 **Step 3: make it operable.**
-6. Runbooks and failure-mode analysis for the tested failures; a written error-budget policy; a readiness review per component; upgrade and DR plans; an HA system pool.
+6. Runbooks and failure-mode analysis for the tested failures; a written error-budget policy; a readiness review per component; an upgrade and DR drill (the plan is written); an HA system pool.
 7. Showback: projected cost per team against its budget, alert before overrun.
 8. Edge, rate limits and multi-region: design first, then build.
 
@@ -230,7 +230,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **Where are you today?** About 43% of a full company platform: 12 of 35 items done, 6 partial. Foundations and reliability are strongest; model delivery and operations are weakest.
 
-**Is it production ready?** No. Designed, built and verified under simulated production load, evidence in CI. Missing: runbooks, a readiness review per component, upgrade and DR.
+**Is it production ready?** No. Designed, built and verified under simulated production load, evidence in CI. Missing: runbooks, a readiness review per component, an upgrade and DR drill (the plan is written, not exercised).
 
 **How does a new team get onboarded?** One script creates the namespace, quota, limit range and a deny-all network policy; CI checks it. The team then declares a VllmService with its objective and budget.
 

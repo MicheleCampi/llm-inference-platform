@@ -1,6 +1,4 @@
-# LLM inference platform
-
-[0 Why](#0-why-this-platform-exists) · [1 What a team can do](#1-what-a-team-can-do) · [2 Architecture](#2-architecture) · [3 Terraform, Helm, Argo CD, Kubernetes](#3-terraform-helm-argo-cd-and-kubernetes-where-and-how) · [4 Status](#4-status-by-layer) · [5 Decisions](#5-decisions) · [6 Checks](#6-how-every-claim-is-checked) · [7 Gaps](#7-known-gaps) · [8 Path](#8-path-to-production)
+# LLM inference platform: a walkthrough for the CTO
 
 *Designed, built and verified under simulated production load; evidence in CI. It has not served real users.*
 
@@ -12,10 +10,27 @@ I spent nine years building cost models for manufacturers. When I moved to LLM i
 - **Waiting:** agents keep GPUs busy doing nothing while their tools run.
 - **Preemption:** losing a spot node only costs errors if nobody plans for it.
 
-Each is a decision a platform should take for the team. So I built one: the team says what it needs, and the platform decides the rest.
+Each is a decision a platform should take for the team, not something every team should solve on its own.
 
-## 1. What a team can do
-**A team asks for a model in one file and gets a served endpoint, with its latency watched and its cost known, without touching GPUs, Kubernetes or alerts.**
+**What it is built on.** Five earlier pieces of work are cited in the operator's design decisions:
+
+| Earlier work | What it found | What it decided |
+|---|---|---|
+| vllm-coldstart-probe (eBPF, Rust) | engine construction 11.7-19.0 s eager, 47.7 s with CUDA graphs (7B, A10) | cold start is a lifecycle state; the operator is in Rust (ADR-0001, 0002) |
+| cuda-graphs-experiment (H100) | decode faster in every configuration; end-to-end throughput +8.5% to -5.2% | warm-up is a documented trade-off (ADR-0002, 0009) |
+| inferscope | sampled timelines; cost-attribution rules | the concurrency bound and the cost model (ADR-0010, 0025) |
+| agentic-kv-energy-experiment (H100) | +69% tokens per joule from KV-cache reuse | placement is an energy decision (ADR-0006, 0007) |
+| llm-d-inference-sim (upstream simulator) | counts one word as one token | every scaling path tested in CI on kind, at zero GPU cost (ADR-0009, 0012 to 0015) |
+
+**What it is:** a reference platform for serving models on GPUs inside a company. A product team declares a model, a latency objective and a budget; the platform provisions, delivers, secures, observes and prices it, on GCP or AWS. Every claim is verifiable with a command.
+
+**Where it stops today (I say this first):**
+- The model-promotion bridge is not yet wired to Argo CD.
+- Cost is computed per scenario, offline, not per team. The budget is declared and exported as a metric, but not enforced.
+- Team separation (tenancy) is in Git and CI, not yet proven on a live cluster.
+
+## 1. Architecture: one change, one request
+**Git is the only way in; the operator is the only thing that touches GPUs; every team gets its own alert.**
 
 *Example:* a support team wants a 7B model that answers within 1 second for 95% of requests, for at most 500 EUR a month. It commits [one file](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/teams/demo/qwen-7b.yaml):
 
@@ -28,21 +43,6 @@ Each is a decision a platform should take for the team. So I built one: the team
       warmupStrategy: Eager
       objective: { ttftSeconds: 1.0, percentile: 95 }
       budget: { eurPerMonth: 500 }
-
-| The team... | Today | Next |
-|---|---|---|
-| gets a served model from one file, validated on submit | yes | delivered by Argo CD from the model registry |
-| never gets traffic on a replica that is still warming | yes (ADR-0002, 0009) | |
-| keeps serving when a spot node is taken away | yes (ADR-0005, 0019) | |
-| scales to zero and wakes on demand | yes, on kind (ADR-0015) | tested on GPU |
-| is paged on its own error budget | yes, for a 1 s objective (ADR-0021) | any objective |
-| sees its spend against its budget | budget exported; cost per run (ADR-0025) | cost per team (showback) |
-| is onboarded with one command into its own namespace: GPU quota, default-deny network, boundaries checked in CI | in Git and CI ([#19](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/19), [#20](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/20)); not yet run live | identity per team |
-
-**Teams are isolated in Git and checked by CI. Proving it on a live cluster, and identity per team, are step 1 of the path.**
-
-## 2. Architecture
-**Git is the only way in; the operator is the only thing that touches GPUs; every team gets its own alert.**
 
 ```mermaid
 flowchart LR
@@ -75,10 +75,25 @@ flowchart LR
   classDef gap stroke-dasharray: 5 5
 ```
 
-- **Infrastructure:** Terraform builds network, cluster and GPU pool, on GKE and on EKS.
-- **Delivery:** Argo CD follows a signed release tag; a root app installs the rest in sync waves.
-- **Control:** a Rust operator turns a VllmService into pods, warm-up, readiness and drain.
-- **Observation:** Alloy ships the metrics; Prometheus evaluates each team's error budget.
+**How to read it:** three columns, left to right: who decides, what runs, who watches. Solid arrows: who creates or drives what. Dashed: metrics, or a piece that does not exist yet.
+
+**Journey 1: how a change gets in.**
+1. The team writes a namespace and a VllmService (model, objective, budget).
+2. It opens a PR. CI checks it before it lands, for example that the namespace has quota, limits and default-deny.
+3. Merge and a signed release tag. Argo CD follows the tag, not the latest commit.
+4. Argo CD makes the cluster match Git in sync waves: projects, then platform services, then teams.
+5. The operator sees the VllmService, creates the vLLM pods, Service and NetworkPolicy, warms the model and marks it Ready only when warm.
+
+Underneath, Terraform has already built network, cluster and GPU pool: keyless plan in CI, apply approved by hand.
+
+> Nobody runs kubectl apply. A change is a pull request: CI checks it, a signed tag releases it, Argo CD applies it, the operator turns it into running pods.
+
+**Journey 2: how a request travels.**
+1. The team's client calls KEDA's HTTP interceptor.
+2. If the model is at zero, the interceptor holds the request and scales to one. The pod asks for a GPU, the pool adds a node, vLLM loads the weights: that is the cold start.
+3. Once the pod is Ready, the request reaches the vLLM Service (ClusterIP, internal only, API key from a Secret).
+4. vLLM generates the answer on the GPU.
+5. Metrics flow through Alloy to Prometheus, which tracks the burn rate of the team's time-to-first-token objective.
 
 **If it breaks.** What the design does, and where to check it.
 
@@ -91,10 +106,10 @@ flowchart LR
 | Docker Hub is down | Builds take base images from mirror.gcr.io | Operator CHANGELOG |
 | Argo CD or the operator stops | Running pods keep serving; nothing new lands until it is back | Kubernetes behaviour; not tested live here |
 
-**Not yet:** no gateway or external endpoint, no per-client key (R2), no rate limits (D3), no identity per team, tenancy not applied live.
+**Not yet:** no gateway or external endpoint, no per-client key, no rate limits, no identity per team, tenancy not applied live.
 
-## 3. Terraform, Helm, Argo CD and Kubernetes: where and how
-**One row per layer: the file to start reading, what it does, why, and how CI checks it.**
+## 2. Terraform, Helm, Argo CD and Kubernetes: where and how
+**Terraform builds the ground, Argo CD keeps the cluster equal to Git, Helm is how software is packaged, and Kubernetes runs it, with my operator as the only thing that touches GPUs.**
 
 | | Start reading at | What it does | Why this way | Check |
 |---|---|---|---|---|
@@ -103,12 +118,47 @@ flowchart LR
 | Terraform, EKS | [eks](https://github.com/MicheleCampi/eks-llm-inference-platform), modules `vpc` and `eks` | the same platform on AWS | not tied to one cloud | `terraform validate` |
 | Helm, written | operator [`chart/`](https://github.com/MicheleCampi/vllm-coldstart-operator/tree/main/chart) | operator, CRD and values as one versioned chart | one unit for Argo CD to install | `helm template` |
 | Helm, consumed | gke [`argocd/apps/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/argocd/apps) | argo-cd 9.5.21, external-secrets 2.6.0, alloy 1.10.0, each version pinned | an upgrade is a reviewed diff | version in Git |
-| Argo CD | gke [`argocd/root-app.yaml`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/argocd/root-app.yaml) | root app at tag v0.5.0 installs `argocd/apps/` in sync waves: -2 root; -1 projects, argo-cd, secrets; 0 monitoring, operator; 1 alloy. One AppProject per role and per team | the cluster changes only from Git, in a stated order | sync status |
+| Argo CD | gke [`argocd/root-app.yaml`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/argocd/root-app.yaml) | root app at tag v0.5.0 installs `argocd/apps/` in sync waves: -2 root; -1 projects, argo-cd, external-secrets; 0 monitoring, operator; 1 alloy. Each team app (team-demo, team-b) syncs in three steps: -1, 0, 1. One AppProject per role and per team | the cluster changes only from Git, in a stated order | sync status |
 | Kubernetes, API | operator [`src/bin/crdgen.rs`](https://github.com/MicheleCampi/vllm-coldstart-operator/blob/main/src/bin/crdgen.rs) | VllmService with objective and budget; the operator owns its Deployment, Service and NetworkPolicy | the team speaks in models, not pods | gke [`ci/validate.sh`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/validate.sh): kubeconform with CRD schemas, negative tests |
 | Kubernetes, tenancy | gke [`tenants/demo/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/tenants/demo), [`ci/new-team.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/new-team.py) | Namespace, ResourceQuota, LimitRange and deny-all NetworkPolicy per team | onboarding is one command | [`ci/check-tenancy.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/check-tenancy.py) in CI |
 
-## 4. Status by layer
-**~43%: 12 capabilities done and 6 partial, out of 35. The unknowns were done first; what remains is known engineering.**
+**Terraform.** Plan in CI with a keyless identity federated from GitHub; the CI service account can only plan. State in a GCS backend, which locks natively. Apply is a human step on an approved plan.
+
+**Argo CD.** Bootstrapped once by hand: install the argo-cd chart, add a read-only deploy key, apply `root-app.yaml`. That is the only manual apply. From there Argo CD manages itself with the same pinned chart, and Terraform never touches it. It follows a signed tag, not a branch, so rollback is going back one tag. Self-heal puts back manual changes; prune removes what left Git.
+
+**Helm.** I write one chart (the operator, its CRD and values) and consume three, each pinned. A chart version is a dependency: bumped in a PR, rendered with `helm template` in CI before Argo CD sees it. Nobody runs `helm install` after bootstrap.
+
+**Kubernetes.** The team speaks in models, not pods: VllmService is the API, and the operator owns the Deployment, Service and NetworkPolicy behind it. The concepts that matter here:
+- readiness means warm, not just started (ADR-0002);
+- GPU nodes are tainted so only vLLM pays for them;
+- graceful shutdown takes the pod out of the Service before it stops (ADR-0019);
+- every reconcile has a time limit (ADR-0016).
+
+I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy, so I turned on Dataplane V2.
+
+**Where I am weak, and what I would do next:**
+- Terraform apply is manual; I would move it into CI behind an environment approval.
+- A team is files generated by `new-team.py`, not an ApplicationSet over a team chart; at around 20 teams I would switch.
+- No identity per team yet (RBAC on groups).
+- Tenancy has never been applied on a live cluster.
+
+
+## 3. What works today, with evidence
+**Measured against a full company platform: about 43%, 12 of 35 items done and 6 partial. The foundations are complete: every claim re-runs with a command.**
+
+**What a team gets:**
+
+| The team... | Today | Next |
+|---|---|---|
+| gets a served model from one file, validated on submit | yes | delivered by Argo CD from the model registry |
+| never gets traffic on a replica that is still warming | yes (ADR-0002, 0009) | |
+| keeps serving when a spot node is taken away | yes (ADR-0005, 0019) | |
+| scales to zero and wakes on demand | yes, on kind (ADR-0015) | tested on GPU |
+| is paged on its own error budget | yes, for a 1 s objective (ADR-0021) | any objective |
+| sees its spend against its budget | budget exported; cost per run (ADR-0025) | cost per team (showback) |
+| is onboarded with one command into its own namespace: GPU quota, default-deny network, boundaries checked in CI | in Git and CI ([#19](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/19), [#20](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/20)); not yet run live | identity per team |
+
+**Status by layer** (percentage = done + partial/2, over 35; foundations counted apart):
 
 | Layer | Items | Done | Partial |
 |---|---|---|---|
@@ -123,42 +173,86 @@ flowchart LR
 | Operations and readiness | 5 | 1 | 0 |
 | **Platform layers (excluding foundations)** | **35** | **12** | **6** |
 
-## 5. Decisions
-**Each decision: the choice, the alternative the ADR rejects, its limit, and the proof. A dash means the ADR names no alternative.**
+**Where it is strongest:**
+1. **Every claim re-runs with a command.** When the evidence did not hold, I retracted my own numbers: a "~18 s" cold start that came from a README and no capture, and a claim that cold start was not I/O-bound.
+2. **Failures are tested under load, in CI.** A reproducible load profile; SLO, error budget and per-replica capacity measured; a cordoned node and a preemption exercised under traffic (ADR-0012, 0013, 0017 to 0019).
+3. **Scaling is measured.** 1 to N through HPA and KEDA (ADR-0014). From zero through the KEDA HTTP add-on with requests held: first token at 8.2 s, worst wait 10.9 s (ADR-0015).
+4. **Capacity and cost come from real GPUs.** One L4 replica serves 0.229 to 0.345 req/s (ADR-0022), calibrated within a 100 EUR cap. The simulator reproduces medians and drain, not queues, and says so (ADR-0024). Cost per million tokens: 4.38 to 8.07 EUR within the SLOs (ADR-0025).
+5. **The supply chain is verifiable.** SLSA Build L2 for the operator image, verified without credentials; a STRIDE threat model with file:line evidence.
 
-| # | Choice | Rejected | Limit | Proof |
-|---|---|---|---|---|
-| D1 | Own operator in Rust (kube-rs), extended into a fleet control plane | Go; a new control plane next to it | one maintainer, own CRDs | ADR-0001, 0003 |
-| D2 | Cold start is a lifecycle state; a warming replica is not capacity | cold start left implicit in pod readiness; GPU utilization as scaling signal | warmth is derived per model | ADR-0002, 0009, 0011 |
-| D3 | Spot preemption: bounded reschedule; a pod leaves the Service before it stops serving | leaving it to the serving engine's SIGTERM handling | the replacement must respect the concurrency cap | ADR-0005, 0017, 0019 |
-| D4 | Scale from zero through the KEDA HTTP add-on, with a bound on waiting requests | an unbounded queue at the interceptor | the first requests wait for the cold start; past the bound, 503 at once | ADR-0015 |
-| D5 | Objectives per GPU class; burn-rate alerts on time to first token | - | only a 1 s objective is evaluated | ADR-0013, 0020, 0021, 0022 |
-| D6 | A time limit on every reconcile | - | a stalled reconcile is retried after 30 s plus the requeue | ADR-0016 |
-| D7 | Load from a trace, replayed open-loop; simulator at the speed of one L4 | - | one GPU class | ADR-0012, 0024 |
-| D8 | Cost per million generated tokens per run: 4.38-8.07 EUR | - | a range tied to a load and its objectives, never one number | ADR-0025 |
+## 4. What is missing, and what I found when I audited myself
+**It is not production ready, and I can say exactly why. It is designed, built and verified under simulated production load, with the evidence in CI.**
 
-ADRs: [vllm-coldstart-operator/docs/adr](https://github.com/MicheleCampi/vllm-coldstart-operator/tree/main/docs/adr)
+**The biggest gaps are on the operating side:**
+- No runbooks or failure-mode analysis for the failures already tested; no written error-budget policy; no SLO on time per output token or on request success.
+- No production readiness review per component; no upgrade or disaster-recovery plan.
 
-## 6. How every claim is checked
+**On the product side:**
+- Model delivery is not wired: the bridge produces the manifest of a promoted model, but Argo CD does not pick it up yet.
+- Cost is per scenario, not per team. The budget is exported as a metric, not compared and not enforced.
+- Only a 1 s latency objective is evaluated; others raise a ticket alert.
+- Tenancy is written and checked in CI, never applied live; no identity per team.
+- GKE and EKS do not share one definition yet; Terraform apply is manual.
+- The simulator matches L4 medians and drain, not queues, so I do not use it for capacity planning.
+- Single region; no gateway, edge or rate limits.
+
+**What the audit found (1 November), each checked against code or captures:**
+- **Cold start, the honest number:** 20 min 40 s from root-app on an L4 flex-start node, of which about 14 min the pod was Pending, waiting for a GPU node. Pulling the 12.45 GB vLLM image took 5 min 40 s; a second cold start with the image cached also took 5 min 40 s. The largest share is waiting for GPU capacity.
+- **One claim was wrong:** the drain wait is 110 s, not 30 s as an earlier version of this page said. Fixed in public ([#19](https://github.com/MicheleCampi/llm-inference-platform/pull/19)).
+- **Single point of failure:** the system pool is one small node, chosen for cost. If it goes, Argo CD, the operator and monitoring go together.
+- **Egress is open by design** (pods download the model); no FQDN limits.
+- **Scale to zero is proven in the operator's CI on kind, not on GKE.** When KEDA lands on the cluster, team NetworkPolicies need an ingress rule for the interceptor's namespace, or wake-from-zero is blocked.
+- **CRD upgrades:** CI regenerates the CRD from the Rust type and fails if a copy drifts. On the cluster Argo CD applies it with ServerSideApply; that path is documented behaviour, not yet tested live.
+
+> Measure, find the bottleneck, then decide what to build. Each gap above has a place in the next section.
+
+## 5. How I get there: next steps, in order
+**In order; each step closes a gap from section 4. Unknowns first, then known engineering.**
+
+**Step 1: make teams real.**
+1. Tenancy live: verify isolation on a cluster, add identity per team, move onboarding to an ApplicationSet over a team chart, so a team is one values file.
+2. One definition for GKE and EKS; Terraform apply from CI behind an environment approval.
+
+**Step 2: make delivery and the contract real.**
+3. Model delivery through Argo CD: the bridge writes to the repo Argo CD already watches.
+4. Any latency objective, not only 1 s; budget compared, not just exported.
+5. Scale to zero tested on GPU, with the NetworkPolicy rule for KEDA; a load test at target traffic.
+
+**Step 3: make it operable.**
+6. Runbooks and failure-mode analysis for the tested failures; a written error-budget policy; a readiness review per component; upgrade and DR plans; an HA system pool.
+7. Showback: projected cost per team against its budget, alert before overrun.
+8. Edge, rate limits and multi-region: design first, then build.
+
+## 6. Questions I expect, answered
+**Short answers, each backed by a section above. If I do not know, I say so and say how I would check.**
+
+**Walk me through the architecture.** A team declares a VllmService. Argo CD syncs it from Git, my Rust operator turns it into Kubernetes objects on a tainted GPU pool, KEDA scales it from zero (proven in the operator's CI on kind, not yet installed on GKE), and Alloy ships time to first token to burn-rate alerts. Terraform builds the cluster; Argo CD owns everything inside it.
+
+**Where are you today?** About 43% of a full company platform: 12 of 35 items done, 6 partial. Foundations and reliability are strongest; model delivery and operations are weakest.
+
+**Is it production ready?** No. Designed, built and verified under simulated production load, evidence in CI. Missing: runbooks, a readiness review per component, upgrade and DR.
+
+**How does a new team get onboarded?** One script creates the namespace, quota, limit range and a deny-all network policy; CI checks it. The team then declares a VllmService with its objective and budget.
+
+**What happens when a GPU node is preempted?** Tested under load, together with a cordoned node, with a faults-under-load job in CI. The replica leaves the Service 110 s before it stops, responses in flight finish, and it moves to another node.
+
+**What does scale to zero cost in latency?** Measured in CI through the KEDA HTTP add-on: first token at 8.2 s, worst wait 10.9 s. Idle GPUs cost nothing; that is the trade.
+
+**How long is your cold start?** On GKE with one L4 on flex-start: 20 min 40 s from the root app to a ready service, and about 14 min of that was the pod waiting for a GPU node. With the 12 GB image already on the node, a second cold start took under 6 min. Node capacity and image pre-pull are the first levers, and the "replica pending" alert is sized on that measured number.
+
+**How do you know what it costs?** A cost model calibrated on a real L4 measurement: about 4.38 to 8.07 EUR per million generated tokens within SLO. Per scenario today; per team is next.
+
+**How do you bootstrap Argo CD itself?** Once, by hand, and documented: install the pinned chart, add a read-only deploy key, apply the root app. From there Argo CD manages itself. Two pieces still live outside Git, the Workload Identity binding and the deploy key; they belong in Terraform.
+
+**What is your single point of failure?** The system pool: one small node in one zone, chosen to keep the lab cheap. If it goes, Argo CD, the operator and monitoring go with it. For production: three zones, at least one node per zone, one Terraform variable.
+
+**How do you roll out a CRD change?** The CRD is generated from the Rust type, never written by hand, and CI fails if a committed copy drifts. A rehearsal once found three new fields missing from both copies and the API server rejected them; that is why the check exists. Helm never upgrades CRDs in `crds/`, so Argo CD applies them with server-side apply. A breaking schema change has not been exercised; it would need a new API version and a conversion strategy.
+
+**What do you write, and what does the AI write?** The AI drafts; I decide and verify. Every change is a PR with CI, numbers are read from files or measured, and every ADR says what it does not prove.
+
+## How every claim is checked
 **Every number has a command and a validity envelope.**
 - `bash ci/validate.sh` in gke: kubeconform with CRD schemas, plus negative tests that must fail.
 - Operator CI: `cargo fmt`, `clippy` with warnings as errors, `cargo test`, promtool rule tests with mutation.
 - Releases are signed tags; Argo CD follows the tag. Merges to main need green CI.
 
-## 7. Known gaps
-**Written down before anyone finds them.**
-- Only a 1 s latency objective is evaluated; others raise a ticket alert.
-- No showback: the budget is exported but not compared with cost.
-- Tenancy is written and checked, not yet run live; no identity per team (needs Google Groups for RBAC).
-- Terraform apply is manual, from an approved plan.
-- Single region; no edge or DDoS layer. These are design answers, not code.
-
-## 8. Path to production
-**In order; each step closes a row of section 4.**
-1. Tenancy live: verify isolation on the cluster, add identity per team, then onboarding as an ApplicationSet over a team chart, so a team is one values file.
-2. Showback: projected cost per team against its budget, alert before overrun.
-3. Any latency objective, not only 1 s.
-4. Apply from CI with approval; model delivery by Argo CD.
-5. Scale to zero tested on GPU; load test at target traffic.
-6. Upgrade and DR runbooks; production readiness review per component.
-7. Multi-region and edge: design first, then build.

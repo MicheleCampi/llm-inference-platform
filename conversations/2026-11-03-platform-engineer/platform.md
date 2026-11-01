@@ -122,7 +122,7 @@ Underneath, Terraform has already built network, cluster and GPU pool: keyless p
 | Kubernetes, API | operator [`src/bin/crdgen.rs`](https://github.com/MicheleCampi/vllm-coldstart-operator/blob/main/src/bin/crdgen.rs) | VllmService with objective and budget; the operator owns its Deployment, Service and NetworkPolicy | the team speaks in models, not pods | gke [`ci/validate.sh`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/validate.sh): kubeconform with CRD schemas, negative tests |
 | Kubernetes, tenancy | gke [`tenants/demo/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/tenants/demo), [`ci/new-team.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/new-team.py) | Namespace, ResourceQuota, LimitRange and deny-all NetworkPolicy per team | onboarding is one command | [`ci/check-tenancy.py`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/ci/check-tenancy.py) in CI |
 
-**Terraform.** Plan in CI with a keyless identity federated from GitHub; the CI service account can only plan. State in a GCS backend, which locks natively. Apply is a human step on an approved plan.
+**Terraform.** Plan in CI with a keyless identity federated from GitHub; the plan identity can only read. State in a GCS backend, which locks natively. Apply runs from CI as a second identity, only from main, on the saved plan, after a required reviewer: wired, not yet exercised.
 
 **Argo CD.** Bootstrapped once by hand: install the argo-cd chart, apply `root-app.yaml`; it reads the public repo over HTTPS, so there is no secret to bootstrap. That is the only manual apply. From there Argo CD manages itself with the same pinned chart, and Terraform never touches it. It follows a signed tag, not a branch, so rollback is going back one tag. Self-heal puts back manual changes; prune removes what left Git.
 
@@ -144,7 +144,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 
 ## 3. What works today, with evidence
-**Measured against a full company platform: about 43%, 12 of 35 items done and 6 partial. The foundations are complete: every claim re-runs with a command.**
+**Measured against a full company platform: about 46%, 12 of 35 items done and 8 partial. The foundations are complete: every claim re-runs with a command.**
 
 **What a team gets:**
 
@@ -163,15 +163,15 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 | Layer | Items | Done | Partial |
 |---|---|---|---|
 | Foundations: truth and verification | 22 | 22 | 0 |
-| Provisioning on two clouds | 3 | 1 | 0 |
+| Provisioning on two clouds | 3 | 1 | 1 |
 | Delivery: GitOps and models | 3 | 0 | 1 |
 | Self-service contract | 8 | 3 | 2 |
 | Signals | 4 | 0 | 1 |
 | Security and tenancy | 2 | 1 | 0 |
 | Reliability | 8 | 5 | 1 |
 | Cost | 2 | 1 | 1 |
-| Operations and readiness | 5 | 1 | 0 |
-| **Platform layers (excluding foundations)** | **35** | **12** | **6** |
+| Operations and readiness | 5 | 1 | 1 |
+| **Platform layers (excluding foundations)** | **35** | **12** | **8** |
 
 **Where it is strongest:**
 1. **Every claim re-runs with a command.** When the evidence did not hold, I retracted my own numbers: a "~18 s" cold start that came from a README and no capture, and a claim that cold start was not I/O-bound.
@@ -211,7 +211,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **Step 1: make teams real.**
 1. Tenancy live: verify isolation on a cluster, add identity per team, move onboarding to an ApplicationSet over a team chart, so a team is one values file.
-2. One definition for GKE and EKS; Terraform apply from CI behind an environment approval.
+2. One definition for GKE and EKS; a first live run of apply from CI, then the apply identity scoped to its resources (closes the accepted trivy finding).
 
 **Step 2: make delivery and the contract real.**
 3. Model delivery through Argo CD: the bridge writes to the repo Argo CD already watches.
@@ -228,7 +228,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **Walk me through the architecture.** A team declares a VllmService. Argo CD syncs it from Git, my Rust operator turns it into Kubernetes objects on a tainted GPU pool, KEDA scales it from zero (proven in the operator's CI on kind, not yet installed on GKE), and Alloy ships time to first token to burn-rate alerts. Terraform builds the cluster; Argo CD owns everything inside it.
 
-**Where are you today?** About 43% of a full company platform: 12 of 35 items done, 6 partial. Foundations and reliability are strongest; model delivery and operations are weakest.
+**Where are you today?** About 46% of a full company platform: 12 of 35 items done, 8 partial. Foundations and reliability are strongest; signals and model delivery are weakest.
 
 **Is it production ready?** No. Designed, built and verified under simulated production load, evidence in CI. Missing: runbooks, a readiness review per component, an upgrade and DR drill (the plan is written, not exercised).
 

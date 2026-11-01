@@ -53,10 +53,10 @@ flowchart LR
   end
   subgraph CL["2. GKE or EKS cluster, GPU node pool"]
     OP["Rust operator<br/>warm-up, readiness, drain"]
-    KEDA["KEDA HTTP interceptor<br/>namespace keda, scale from zero"]
+    KEDA["KEDA HTTP interceptor<br/>scale from zero, proven on kind"]
     subgraph NS["Namespace per team: quota, LimitRange, default-deny"]
       CLIENT["Client pod"]
-      SVC["vLLM Service<br/>ClusterIP, API key"]
+      SVC["vLLM Service<br/>ClusterIP, optional API key"]
       VLLM["vLLM on GPU<br/>traffic only when warm"]
     end
   end
@@ -91,7 +91,7 @@ Underneath, Terraform has already built network, cluster and GPU pool: keyless p
 **Journey 2: how a request travels.**
 1. The team's client calls KEDA's HTTP interceptor.
 2. If the model is at zero, the interceptor holds the request and scales to one. The pod asks for a GPU, the pool adds a node, vLLM loads the weights: that is the cold start.
-3. Once the pod is Ready, the request reaches the vLLM Service (ClusterIP, internal only, API key from a Secret).
+3. Once the pod is Ready, the request reaches the vLLM Service (ClusterIP, internal only; an API key from a Secret is supported, not set in the demo teams).
 4. vLLM generates the answer on the GPU.
 5. Metrics flow through Alloy to Prometheus, which tracks the burn rate of the team's time-to-first-token objective.
 
@@ -114,7 +114,7 @@ Underneath, Terraform has already built network, cluster and GPU pool: keyless p
 | | Start reading at | What it does | Why this way | Check |
 |---|---|---|---|---|
 | Terraform, GKE | gke [`terraform/main.tf`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/terraform/main.tf) -> [`modules/gke-gpu/main.tf`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/terraform/modules/gke-gpu/main.tf) | APIs, VPC, subnet; regional cluster, system pool, L4 pool 0..1, Workload Identity, Dataplane V2 | reviewable, reproducible; the cluster in one module | `terraform validate`, trivy (an obsolete exception fails CI), plan in CI |
-| Terraform, CI identity | gke [`bootstrap/ci-identity/main.tf`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/bootstrap/ci-identity/main.tf) | Workload Identity pool and provider for GitHub, plan-only service account | no long-lived keys; CI plans, never applies | plan job behind an approval |
+| Terraform, CI identity | gke [`bootstrap/ci-identity/main.tf`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/bootstrap/ci-identity/main.tf) | Workload Identity pool and provider for GitHub; plan and apply service accounts, one per GitHub environment | no long-lived keys; apply only from main, on the saved plan, behind a reviewer | plan and apply jobs behind approvals |
 | Terraform, EKS | [eks](https://github.com/MicheleCampi/eks-llm-inference-platform), modules `vpc` and `eks` | the same platform on AWS | not tied to one cloud | `terraform validate` |
 | Helm, written | operator [`chart/`](https://github.com/MicheleCampi/vllm-coldstart-operator/tree/main/chart) | operator, CRD and values as one versioned chart | one unit for Argo CD to install | `helm template` |
 | Helm, consumed | gke [`argocd/apps/`](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/argocd/apps) | argo-cd 9.5.21, external-secrets 2.6.0, alloy 1.10.0, each version pinned | an upgrade is a reviewed diff | version in Git |
@@ -154,7 +154,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 | never gets traffic on a replica that is still warming | yes (ADR-0002, 0009) | |
 | keeps serving when a spot node is taken away | yes (ADR-0005, 0019) | |
 | scales to zero and wakes on demand | yes, on kind (ADR-0015) | tested on GPU |
-| is paged on its own error budget | yes, for a 1 s objective (ADR-0021) | any objective |
+| is alerted on its own error budget | yes, for a 1 s objective (ADR-0021) | any objective |
 | sees its spend against its budget | budget exported; cost per run (ADR-0025) | cost per team (showback) |
 | is onboarded with one command into its own namespace: GPU quota, default-deny network, boundaries checked in CI | in Git and CI ([#19](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/19), [#20](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/20)); not yet run live | identity per team |
 
@@ -176,7 +176,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 **Where it is strongest:**
 1. **Every claim re-runs with a command.** When the evidence did not hold, I retracted my own numbers: a "~18 s" cold start that came from a README and no capture, and a claim that cold start was not I/O-bound.
 2. **Failures are tested under load, in CI.** A reproducible load profile; SLO, error budget and per-replica capacity measured; a cordoned node and a preemption exercised under traffic (ADR-0012, 0013, 0017 to 0019).
-3. **Scaling is measured.** 1 to N through HPA and KEDA (ADR-0014). From zero through the KEDA HTTP add-on with requests held: first token at 8.2 s, worst wait 10.9 s (ADR-0015).
+3. **Scaling is measured, in CI on kind.** 1 to N through HPA and KEDA (ADR-0014). From zero through the KEDA HTTP add-on with requests held: first token at 8.2 s, worst wait 10.9 s (ADR-0015).
 4. **Capacity and cost come from real GPUs.** One L4 replica serves 0.229 to 0.345 req/s (ADR-0022), calibrated within a 100 EUR cap. The simulator reproduces medians and drain, not queues, and says so (ADR-0024). Cost per million tokens: 4.38 to 8.07 EUR within the SLOs (ADR-0025).
 5. **The supply chain is verifiable.** SLSA Build L2 for the operator image, verified without credentials; a STRIDE threat model with file:line evidence.
 
@@ -238,7 +238,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **What does scale to zero cost in latency?** Measured in CI through the KEDA HTTP add-on: first token at 8.2 s, worst wait 10.9 s. Idle GPUs cost nothing; that is the trade.
 
-**How long is your cold start?** On GKE with one L4 on flex-start: 20 min 40 s from the root app to a ready service, and about 14 min of that was the pod waiting for a GPU node. With the 12 GB image already on the node, a second cold start took under 6 min. Node capacity and image pre-pull are the first levers, and the "replica pending" alert is sized on that measured number.
+**How long is your cold start?** On GKE with one L4 on flex-start: 20 min 40 s from the root app to a ready service, and about 14 min of that was the pod waiting for a GPU node. With the 12 GB image already on the node, a second cold start took under 6 min. Node capacity is the first lever. With the image cached it still took 5 min 40 s, so model load, not image pull, is the next thing to measure.
 
 **How do you know what it costs?** A cost model calibrated on a real L4 measurement: about 4.38 to 8.07 EUR per million generated tokens within SLO. Per scenario today; per team is next.
 

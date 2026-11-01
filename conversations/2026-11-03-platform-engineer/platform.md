@@ -5,7 +5,7 @@
 ## 0. Why this platform exists
 **Serving an LLM is mostly paying for GPUs, and the decisions that set that cost are still made by hand.**
 
-I spent nine years building cost models for manufacturers. When I moved to LLM inference I asked the same question, what does serving cost and why, and measured it on real GPUs for five months. Three answers stood out:
+I spent eight years building cost models for manufacturers. When I moved to LLM inference I asked the same question, what does serving cost and why, and measured it on real GPUs for five months. Three answers stood out:
 - **Cold start:** a replica still loading weights is paid for and cannot serve.
 - **Waiting:** agents keep GPUs busy doing nothing while their tools run.
 - **Preemption:** losing a spot node only costs errors if nobody plans for it.

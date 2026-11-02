@@ -154,7 +154,7 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 
 ## 3. What works today, with evidence
-**Measured against a full company platform: about 46%, 12 of 35 items done and 8 partial. The foundations are complete: every claim re-runs with a command.**
+**Measured against my own checklist of a full company platform (ROADMAP): about 46%, 12 of 35 items done and 8 partial. The foundations are complete: every claim re-runs with a command.**
 
 **What a team gets:**
 
@@ -239,6 +239,8 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 
 **Walk me through the architecture.** A team declares a VllmService. Argo CD syncs it from Git, my Rust operator turns it into Kubernetes objects on a tainted GPU pool, a FleetService scales from zero with KEDA (proven in the operator's CI on kind, not yet installed on GKE), and Alloy ships time to first token to burn-rate alerts. Terraform builds the cluster; Argo CD owns everything inside it.
 
+**Why write your own operator instead of using KServe or llm-d?** The operator exists to study one problem, the lifecycle of a cold start, and to own it end to end. In a company I would start from what exists, KServe or llm-d, and contribute upstream what is missing. I would revisit the custom operator the day an upstream project covers warm-up as a lifecycle state.
+
 **Where are you today?** About 46% of a full company platform: 12 of 35 items done, 8 partial. Foundations and reliability are strongest; signals and model delivery are weakest.
 
 **Is it production ready?** No. Designed, built and verified under simulated production load, evidence in CI. Missing: runbooks for the tested failures, a readiness review per component, an upgrade and DR drill (the plan is written, not exercised).
@@ -248,6 +250,8 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 **What happens when a GPU node is preempted?** Tested under load, together with a cordoned node, with a faults-under-load job in CI on multi-node kind. The replica leaves the Service 110 s before it stops, responses in flight finish, and it moves to another node.
 
 **What does scale to zero cost in latency?** Measured in CI on kind, for a FleetService, through the KEDA HTTP add-on: first token at 8.2 s, worst wait 10.9 s. Idle GPUs cost nothing; that is the trade.
+
+**Cold start is 20 minutes: how do you survive a traffic peak?** Not with scale from zero. A predictable peak is met with warm replicas scheduled before it: today that is a PR raising `replicas`; a scheduled scaler is not built yet. Scale from zero is for traffic nobody can predict. The idle GPUs before the peak are its price, and the cost model can quote it.
 
 **How long is your cold start?** On GKE with one L4 on flex-start: 20 min 40 s from the root app to a ready service, and about 14 min of that was the pod waiting for a GPU node. Node capacity is the first lever. With the image cached it still took 5 min 40 s, so model load, not image pull, is the next thing to measure.
 

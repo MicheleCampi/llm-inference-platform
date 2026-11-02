@@ -2,6 +2,8 @@
 
 *Designed, built and verified under simulated production load; evidence in CI. It has not served real users.*
 
+**What it is:** a reference platform for serving models on GPUs inside a company. A product team declares a model, a latency objective and a budget; the platform provisions, delivers, secures, observes and prices it, on GCP or AWS. Every claim is verifiable with a command.
+
 ## 0. Why this platform exists
 **Serving an LLM is mostly paying for GPUs, and the decisions that set that cost are still made by hand.**
 
@@ -14,18 +16,9 @@ Each is a decision a platform should take for the team, not something every team
 
 The same three decide whether a traffic peak is served or dropped: capacity that arrives late, capacity held idle, capacity lost mid-request.
 
-**What it is built on.** Each problem has earlier measurements behind it, cited in the operator's design decisions:
-
-| Problem | Earlier work and what it found | What the platform decided |
-|---|---|---|
-| Cold start | vllm-coldstart-probe (eBPF, Rust): engine construction 11.7-19.0 s eager, 47.7 s with CUDA graphs (7B, A10); cuda-graphs-experiment (H100): decode faster in every configuration, end-to-end throughput +8.5% to -5.2% | cold start is a lifecycle state, warm-up a documented trade-off; the operator is in Rust (ADR-0001, 0002, 0009) |
-| Waiting | agentic-kv-energy-experiment (H100): +69% tokens per joule from KV-cache reuse | placement is an energy decision (ADR-0006, 0007) |
-| Preemption | no earlier experiment: designed in the operator | only a preemption notice or a cordon moves a placement, one at a time by default; with no eligible target the fleet drains and holds; a pod leaves the Service before it stops serving (ADR-0005, 0017, 0019) |
-| Price, across all three | inferscope: sampled timelines; cost-attribution rules | the concurrency bound and the cost model (ADR-0010, 0025) |
+**What it is built on.** Cold start and waiting were measured on real GPUs before the platform decided anything about them; preemption was designed in the operator and tested in CI. The measurements and the decisions are cited in the operator's ADRs.
 
 **How it is tested.** The upstream simulator llm-d-inference-sim (it counts one word as one token) is the method, not a finding: every scaling and fault path runs in CI on kind, at zero GPU cost (ADR-0009, 0012 to 0015).
-
-**What it is:** a reference platform for serving models on GPUs inside a company. A product team declares a model, a latency objective and a budget; the platform provisions, delivers, secures, observes and prices it, on GCP or AWS. Every claim is verifiable with a command.
 
 **Where it stops today (I say this first):**
 - The model-promotion bridge is not yet wired to Argo CD.
@@ -168,21 +161,6 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 | sees its spend against its budget | budget exported; cost per run (ADR-0025) | cost per team (showback) |
 | is onboarded with one command into its own namespace: GPU quota, default-deny network, boundaries checked in CI | in Git and CI ([#19](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/19), [#20](https://github.com/MicheleCampi/gke-llm-inference-platform/pull/20)); not yet run live | identity per team |
 
-**Status by layer** (percentage = done + partial/2, over 35; foundations counted apart):
-
-| Layer | Items | Done | Partial |
-|---|---|---|---|
-| Foundations: truth and verification | 22 | 22 | 0 |
-| Provisioning on two clouds | 3 | 1 | 1 |
-| Delivery: GitOps and models | 3 | 0 | 1 |
-| Self-service contract | 8 | 3 | 2 |
-| Signals | 4 | 0 | 1 |
-| Security and tenancy | 2 | 1 | 0 |
-| Reliability | 8 | 5 | 1 |
-| Cost | 2 | 1 | 1 |
-| Operations and readiness | 5 | 1 | 1 |
-| **Platform layers (excluding foundations)** | **35** | **12** | **8** |
-
 **Where it is strongest:**
 1. **Every claim re-runs with a command.** When the evidence did not hold, I retracted my own numbers: a "~18 s" cold start that came from a README and no capture, and a claim that cold start was not I/O-bound.
 2. **Failures are tested under load, in CI.** A reproducible load profile; SLO, error budget and per-replica capacity measured; a cordoned node and a preemption exercised under traffic (ADR-0012, 0013, 0017 to 0019). The job found a defect the objectives could not see: the replay met every objective while a drain cut 3 of 4 open streams. A preStop wait fixed it; the job now fails if any open stream is cut (ADR-0019).
@@ -193,20 +171,6 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 ## 4. What is missing, and what I found when I audited myself
 **It is not production ready, and I can say exactly why. It is designed, built and verified under simulated production load, with the evidence in CI.**
 
-**The biggest gaps are on the operating side:**
-- One runbook, for the latency burn-rate alert; none yet, and no failure-mode analysis, for the failures already tested (preemption, cordon, drain); no written error-budget policy; no SLO on time per output token or on request success.
-- No production readiness review per component; upgrade and DR written down (gke [`docs/upgrade-and-dr.md`](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md)), not drilled: no maintenance window, no measured RTO, one region.
-
-**On the product side:**
-- Model delivery is not wired: the bridge produces the manifest of a promoted model, but Argo CD does not pick it up yet.
-- Cost is per scenario, not per team. The budget is exported as a metric, not compared and not enforced.
-- Only a 1 s first-token objective is measured exactly, at the 1 s bucket of vLLM's histogram; a team that declares another is still measured at 1 s, and a ticket tells it so.
-- Tenancy is written and checked in CI, never applied live; no identity per team.
-- GKE and EKS do not share one definition yet; apply from CI has not run yet (the first run creates the GPU cluster).
-- The simulator matches L4 medians and drain, not queues, so I do not use it for capacity planning.
-- Faults are tested under a replayed load on kind with the calibrated simulator, not yet on GPU or at target traffic.
-- Single region; no gateway, edge or rate limits.
-
 **What the audit found (1 November), each checked against code or captures:**
 - **Cold start, the honest number:** 20 min 40 s from root-app on an L4 flex-start node, of which about 14 min the pod was Pending, waiting for a GPU node. Pulling the 12.45 GB vLLM image took 5 min 40 s. A second cold start with the image already on the node also took 5 min 40 s, about 33 s of it the old pod's preStop: the pull is not the bottleneck, model load is the next thing to measure. The largest share is waiting for GPU capacity.
 - **One claim was wrong:** the drain wait is 110 s, not 30 s as an earlier version of this page said. Fixed in public ([#19](https://github.com/MicheleCampi/llm-inference-platform/pull/19)).
@@ -215,24 +179,34 @@ I checked enforcement before writing policy: GKE was not enforcing NetworkPolicy
 - **Scale to zero is proven in the operator's CI on kind, not on GKE.** When KEDA lands on the cluster, team NetworkPolicies need an ingress rule for the interceptor's namespace, or wake-from-zero is blocked.
 - **CRD upgrades:** CI regenerates the CRD from the Rust type and fails if a copy drifts. On the cluster Argo CD applies it with ServerSideApply; that path is documented behaviour, not yet tested live.
 
-> Measure, find the bottleneck, then decide what to build. Each gap above has a place in the next section.
+> Measure, find the bottleneck, then decide what to build. The next section is the plan.
 
-## 5. How I get there: next steps, in order
-**In order; each step closes a gap from section 4. Unknowns first, then known engineering.**
+## 5. Where it goes next, and why it will hold
+**The next steps are not new kinds of work: they are the same Terraform, GitOps and Kubernetes work already done and verified here, applied to more teams and more clusters. Each step names what it already builds on and how it will be proven.**
 
 **Step 1: make teams real.**
-1. Tenancy live: verify isolation on a cluster, add identity per team, move onboarding to an ApplicationSet over a team chart, so a team is one values file.
-2. One definition for GKE and EKS; a first live run of apply from CI, then the apply identity scoped to its resources (closes the accepted trivy finding).
+- *Gap:* tenancy is in Git and CI, never applied live; no identity per team.
+- *Decision:* apply it on a live cluster; RBAC bound to groups; onboarding as an ApplicationSet over a team chart, so a team is one values file.
+- *Builds on:* `ci/new-team.py`, `ci/check-tenancy.py` (#19, #20), one AppProject per team.
+- *Proof:* on a live cluster, a pod in one team cannot reach another team's service.
 
-**Step 2: make delivery and the contract real.**
-3. Model delivery through Argo CD: the bridge writes to the repo Argo CD already watches.
-4. Any latency objective, not only 1 s; budget compared, not just exported.
-5. Scale to zero tested on GPU, with the NetworkPolicy rule for KEDA; a load test at target traffic.
+**Step 2: from one cluster to many.**
+- *Gap:* one cluster; GKE and EKS do not share one definition; apply from CI has not run.
+- *Decision:* one Terraform module per cluster with its own state; a first live apply from CI, then the apply identity scoped to its resources; an ApplicationSet with a cluster generator.
+- *Builds on:* `modules/gke-gpu`, the EKS modules, the keyless plan and apply identities, the sync waves in `root-app.yaml`.
+- *Proof:* a second cluster synced from the same Git tag, and a check that both converge.
 
-**Step 3: make it operable.**
-6. Runbooks and failure-mode analysis for the tested failures; a written error-budget policy; a readiness review per component; an upgrade and DR drill (the plan is written); an HA system pool.
-7. Showback: projected cost per team against its budget, alert before overrun.
-8. Edge, rate limits and multi-region: design first, then build.
+**Step 3: a security baseline every cluster gets.**
+- *Gap:* egress open; API key optional; no gateway; no admission policy.
+- *Decision:* Pod Security Standards (restricted) and admission policies; an egress allowlist, models served from a mirror; a gateway with per-client keys and rate limits.
+- *Builds on:* enforcement checked before writing policy (Dataplane V2), default-deny, trivy exceptions with an expiry, the STRIDE model.
+- *Proof:* negative tests in `ci/validate.sh` that must fail, the pattern already in place.
+
+**Step 4: make it operable.**
+- *Gap:* one runbook; upgrade and DR written, not drilled; single-zone system pool; faults tested on kind, not on GPU; model delivery not wired; cost per scenario, not per team.
+- *Decision:* runbooks and an error-budget policy for the tested failures; a system pool across three zones; the promotion bridge writes to the repo Argo CD watches; showback against each team's budget.
+- *Builds on:* `docs/runbooks/ttft-burn-rate.md`, `docs/upgrade-and-dr.md`, the faults-under-load CI job, the model-promotion bridge, ADR-0025.
+- *Proof:* a DR drill with a measured recovery time; an alert before a team overruns its budget.
 
 ## 6. Questions I expect, answered
 **Short answers, each backed by a section above. If I do not know, I say so and say how I would check.**

@@ -11,7 +11,7 @@ Designed, built and verified under simulated production load, evidence in CI. No
 
 ## Architecture
 
-A team declares a model, a latency objective and a budget; platform.md on the site walks the full path. Here: the operator (VllmService, FleetService) on kind or GKE, KEDA and its HTTP add-on for scaling, Prometheus for the objective.
+A team declares a model, a latency objective and a budget; [platform.md](../conversations/2026-11-03-platform-engineer/platform.md) walks the full path. Here: the operator (VllmService, FleetService) on kind or GKE, KEDA and its HTTP add-on for scaling, Prometheus for the objective.
 
 ## Objectives (ADR-0013, ADR-0022 D1)
 

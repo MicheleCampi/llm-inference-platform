@@ -11,12 +11,12 @@ Designed, built and verified under simulated production load, evidence in CI. No
 
 ## Architecture
 
-A team declares a model, a latency objective and a budget; platform.md on the site walks the full path. Here: the operator (VllmService, FleetService) on kind or GKE, KEDA and its HTTP add-on for scaling, Prometheus for the objective.
+A team declares a model, a latency objective and a budget; [platform.md](../conversations/2026-11-03-platform-engineer/platform.md) walks the full path. Here: the operator (VllmService, FleetService) on kind or GKE, KEDA and its HTTP add-on for scaling, Prometheus for the objective.
 
 ## Objectives (ADR-0013, ADR-0022 D1)
 
 - TTFT within 1000 ms for 95% of requests; on the L4, prompts above 2048 tokens within 2000 ms.
-- TPOT within 50 ms on the simulator.
+- TPOT within 100 ms on the L4 and 50 ms on the simulator; 99.5% of requests served.
 
 ## Results
 

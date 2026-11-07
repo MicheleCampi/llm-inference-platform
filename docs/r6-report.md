@@ -16,7 +16,7 @@ A team declares a model, a latency objective and a budget; platform.md on the si
 ## Objectives (ADR-0013, ADR-0022 D1)
 
 - TTFT within 1000 ms for 95% of requests; on the L4, prompts above 2048 tokens within 2000 ms.
-- TPOT within 50 ms on the simulator.
+- TPOT within 100 ms on the L4 and 50 ms on the simulator; 99.5% of requests served.
 
 ## Results
 

@@ -93,6 +93,7 @@ Narrative:
 - **Cost:** 4.38 to 8.07 EUR per million generated tokens within the L4 objectives (ADR-0025).
 - **Envelope:** the load simulator is calibrated to one L4's medians, not its tails
   (ADR-0024). It proves the control plane and the logic, not GPU capacity.
+- **Full report:** the [R6 report](docs/r6-report.md) lists ten results, each with its source and the command to reproduce it.
 
 ## Security posture
 
@@ -131,15 +132,14 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 - Argo CD and the operator run as single replicas.
 - Only a 1 s time-to-first-token objective is enforced; any other value raises a ticket alert
   (`VllmTtftObjectiveUnsupported`) instead of being silently ignored.
-- The declared budget is exported but not yet used: no cost is attributed per team (showback).
-- No identity per team yet: namespaces, quotas and network policy are in place, but access is
-  not separated per team. See the [golden path](docs/golden-path.md).
+- Showback is a query, not yet a number per team: [finops/](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/finops) splits billed cost by namespace; on the one billed run most cost is cluster cost not attributed to a pod.
+- Access per team: Roles per team are defined in the gke repository, not yet proven on a live cluster. See the [golden path](docs/golden-path.md).
 
 ## This repository
 
 - `README.md`: this entry point.
 - `conversations/`: [platform.md](conversations/2026-11-03-platform-engineer/platform.md), the full write-up of the platform.
-- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md) and the [golden path](docs/golden-path.md) of a new team.
+- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team and the [R6 report](docs/r6-report.md).
 - `presentations/`: short guided tours of the platform (coming).
 
 The platform is under active development; what is missing is listed above.

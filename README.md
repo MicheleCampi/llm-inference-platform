@@ -25,7 +25,7 @@ Serving an LLM is mostly paying for GPUs. Three forces pull against each other:
 
 ## How it fits together
 
-    Terraform (remote state, keyless plan in CI; apply from CI wired, not yet run)
+    Terraform (remote state, keyless plan in CI; apply from CI, first run in sessions B-006 and B-007)
       -> GKE: CPU system pool + L4 GPU pool that scales 0..1, Workload Identity
         -> Argo CD (app of apps, sync waves): External Secrets, monitoring, operator, Alloy
           -> vllm-coldstart-operator: VllmService -> Deployment + Service + status
@@ -139,7 +139,7 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 
 - `README.md`: this entry point.
 - `conversations/`: [platform.md](conversations/2026-11-03-platform-engineer/platform.md), the full write-up of the platform.
-- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team, the [R6 report](docs/r6-report.md) and the [postmortems](docs/postmortems/README.md) of real incidents.
+- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team, the [R6 report](docs/r6-report.md), the [postmortems](docs/postmortems/README.md) of real incidents, the [platform runbook](docs/runbook.md) and the [production readiness review](docs/prr.md).
 - `presentations/`: short guided tours of the platform (coming).
 
 The platform is under active development; what is missing is listed above.

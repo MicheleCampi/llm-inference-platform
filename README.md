@@ -97,13 +97,13 @@ Narrative:
 
 ## Security posture
 
-A STRIDE [threat model](docs/threat-model.md) covers 23 threats: 13 mitigated, 6 partly
-mitigated, 3 not mitigated, 1 not yet assessed. Each row states its status and residual
+A STRIDE [threat model](docs/threat-model.md) covers 23 threats: 13 mitigated, 7 partly
+mitigated, 2 not mitigated, 1 not yet assessed. Each row states its status and residual
 risk, and the document ends with a prioritised list of what to close next.
 
 Open items, as named in the threat model:
 
-- S4, not mitigated: EKS workloads use the node IAM role. Next: IRSA per service account (priority 4).
+- S4, partly mitigated: EKS nodes block the node IAM role from pods (IMDSv2, hop limit 1) and IRSA binds a role to one service account ([eks #5](https://github.com/MicheleCampi/eks-llm-inference-platform/pull/5)); tested offline, not applied to a live cluster.
 - R2, not mitigated: one shared static key per vLLM service, so no per-client attribution.
   Next: per-client identity (priority 1).
 - D3, not mitigated: no rate limits or quotas, so one client can exhaust the GPU.

@@ -11,8 +11,8 @@ The full write-up, with architecture, numbers and limits: [platform.md](conversa
 
 ## Status
 
-Platform layers: about 46% (12 done, 8 partial, of 35); foundations 22 of 22 (1 November 2026).
-The count is kept in one place, the roadmap; what is missing is listed in
+Platform layers: about 53% (15 done, 7 partial, of 35); foundations 22 of 22 ([status](docs/status.md), 8 November 2026).
+The count is kept in one place, [docs/status.md](docs/status.md), checked in CI; what is missing is listed in
 [What is not done yet](#what-is-not-done-yet).
 
 ## The problem
@@ -87,7 +87,7 @@ Narrative:
 ## Measured, with its envelope
 
 - **One L4 session (27 October 2026):** the whole chain ran end to end; burn-rate alerts
-  fired and notified. Cost of the session: 2.48 EUR.
+  fired and notified. Cost of the session: 2.48 EUR ([billed sessions](docs/status.md#billed-gpu-sessions)).
 - **L4 objectives:** time to first token 1 s (2 s above 2048 prompt tokens), time per
   output token 100 ms, for 95% of requests, 99.5% served.
 - **Cost:** 4.38 to 8.07 EUR per million generated tokens within the L4 objectives (ADR-0025).

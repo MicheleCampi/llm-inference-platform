@@ -139,7 +139,7 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 
 - `README.md`: this entry point.
 - `conversations/`: [platform.md](conversations/2026-11-03-platform-engineer/platform.md), the full write-up of the platform.
-- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team and the [R6 report](docs/r6-report.md).
+- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team, the [R6 report](docs/r6-report.md) and the [postmortems](docs/postmortems/README.md) of real incidents.
 - `presentations/`: short guided tours of the platform (coming).
 
 The platform is under active development; what is missing is listed above.

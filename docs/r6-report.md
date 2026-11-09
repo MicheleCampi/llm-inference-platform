@@ -31,7 +31,7 @@ A team declares a model, a latency objective and a budget; [platform.md](../conv
 | Cordon moves the replica | Ready on the other worker | kind, job preemption | ADR-0017:62-67 |
 | Simulator against L4, TTFT p50/p95 | 258/1126 against 217/1198 ms | kind, L4 | ADR-0024:51-54 |
 | Cost per million generated tokens | 4.38 to 8.07 EUR within objectives, 1.16 outside | B-005 records | ADR-0025:47-59 |
-| Billed cost of one CI apply to a ready cluster | 0.1194 EUR net | billing export | finops/README.md in gke-llm-inference-platform |
+| Billed cost of one CI apply to a ready cluster | 0.1196 EUR net, all services (0.1194 on rows labelled cost-center=inference) | billing export, read 2026-11-09 | finops/README.md in gke-llm-inference-platform |
 
 Cold starts on the L4: docs/BENCHMARKS.md in the operator.
 

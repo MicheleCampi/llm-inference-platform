@@ -17,8 +17,8 @@ README stops matching it.
 | Security and tenancy | 2 | 2 | 0 |
 | Reliability | 8 | 6 | 1 |
 | Cost | 2 | 1 | 1 |
-| Operations and readiness | 5 | 1 | 1 |
-| **Platform layers (foundations excluded)** | **35** | **15** | **7** |
+| Operations and readiness | 5 | 2 | 0 |
+| **Platform layers (foundations excluded)** | **35** | **16** | **6** |
 
 ## Billed GPU sessions
 

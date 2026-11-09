@@ -11,7 +11,7 @@ The full write-up, with architecture, numbers and limits: [platform.md](conversa
 
 ## Status
 
-Platform layers: about 53% (15 done, 7 partial, of 35); foundations 22 of 22 ([status](docs/status.md), 8 November 2026).
+Platform layers: about 54% (16 done, 6 partial, of 35); foundations 22 of 22 ([status](docs/status.md), 9 November 2026).
 The count is kept in one place, [docs/status.md](docs/status.md), checked in CI; what is missing is listed in
 [What is not done yet](#what-is-not-done-yet).
 

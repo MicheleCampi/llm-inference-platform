@@ -15,10 +15,10 @@ README stops matching it.
 | Self-service contract | 8 | 3 | 2 |
 | Signals | 4 | 0 | 1 |
 | Security and tenancy | 2 | 2 | 0 |
-| Reliability | 8 | 7 | 1 |
+| Reliability | 8 | 8 | 0 |
 | Cost | 2 | 2 | 0 |
 | Operations and readiness | 5 | 2 | 0 |
-| **Platform layers (foundations excluded)** | **35** | **18** | **5** |
+| **Platform layers (foundations excluded)** | **35** | **19** | **4** |
 
 ## Billed GPU sessions
 

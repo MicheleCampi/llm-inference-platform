@@ -118,17 +118,16 @@ CI fails if the counts above stop matching it.
 Start from the operator's CI: eleven checks on kind clusters, including faults under load,
 preemption, scale to zero with KEDA, and load replayed from a public production trace.
 Every ADR states its evidence. The GKE repository runs a keyless Terraform plan in CI, and apply from CI as a second
-identity, main only, behind a reviewer (wired, not yet exercised);
+identity, main only, behind a reviewer (used in the disaster-recovery drill of 9 November 2026);
 the EKS repository runs `terraform test` in CI with the same pinned tools.
 
 ## What is not done yet
 
 - One region, one cloud in operation; GKE and EKS are still two separate definitions.
-- Upgrade and disaster recovery are written down ([gke docs](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md)),
-  not drilled: no maintenance window, no measured recovery time.
+- Disaster recovery drilled once ([46 min 11 s](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md#drill-9-november-2026)); no maintenance window, no standby region.
 - No real traffic; no DDoS or edge protection in front of the service yet.
-- Runbooks, failure-mode analysis and a production readiness review per component are
-  on the roadmap, not written.
+- A production readiness review per component is not written; the platform has a
+  [runbook](docs/runbook.md), a [failure-mode analysis](docs/fmea.md) and a [review](docs/prr.md).
 - Argo CD and the operator run as single replicas.
 - Only a 1 s time-to-first-token objective is enforced; any other value raises a ticket alert
   (`VllmTtftObjectiveUnsupported`) instead of being silently ignored.

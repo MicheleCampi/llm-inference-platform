@@ -1,7 +1,8 @@
 # Platform runbook
 
 Incidents at the platform level: capacity, infrastructure from CI, cost and
-teardown. Each section comes from a real incident ([postmortems](postmortems/README.md)).
+teardown. Sections 1 to 4 come from real incidents ([postmortems](postmortems/README.md));
+sections 5 and 6 from tested faults ([failure-mode analysis](fmea.md)).
 Faults inside the operator and the latency alerts have their own runbooks:
 [operator runbook](https://github.com/MicheleCampi/vllm-coldstart-operator/blob/main/RUNBOOK.md),
 [time to first token burn rate](https://github.com/MicheleCampi/vllm-coldstart-operator/blob/main/docs/runbooks/ttft-burn-rate.md).
@@ -47,3 +48,24 @@ Symptom: the post-session billing shows a SKU that is not in the estimate.
 - Destroy by the session's time cap, whatever the state of the measurements.
 - `gcloud container clusters list` and `gcloud compute instances list` empty.
 - Read the billing for the day once it is final, against the estimate.
+
+## 5. Node drained or preempted under load
+
+Symptom: a GPU node gets a preemption notice or is drained while streams are
+open. Tested on kind under load: 4 open streams, 0 cut; a cordoned node's
+replica came back Ready on the other worker ([R6](r6-report.md)).
+
+1. Do not force-delete the pod: the preStop drain lets open streams finish.
+2. Check the replacement replica: Pending with FailedScaleUp is section 1.
+3. Not yet tested on a GPU node: record the timings if it happens there.
+
+## 6. Cluster lost
+
+Symptom: the cluster is gone or unusable. Workloads are stateless and secrets
+live outside the cluster, so the recovery is a rebuild from Git
+([drill](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md#drill-9-november-2026): 46 min 11 s from no cluster to the team model Ready).
+
+1. Dispatch `apply.yml` from CI and approve the plan.
+2. Run `scripts/bootstrap-argocd.sh`, then apply `root-app.yaml`; Argo CD syncs the rest.
+3. Wait for the GPU node: a stockout here is section 1.
+4. Done when a team model answers HTTP 200.

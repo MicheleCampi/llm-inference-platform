@@ -17,5 +17,6 @@ item. **Met** has public evidence; **open** says what is missing. Reviewed
 | Losses before the replica | Open | Refused connections and missing endpoints are only checked client-side; no alert |
 | Time per output token | Open | Checked client-side only; no alert |
 | GPU capacity | Open | No reservation: on-demand failed in two regions ([PM-001](postmortems/pm-001-l4-stockouts.md)); flex-start queues but does not guarantee |
-| Upgrade and disaster recovery | Open | [Written down](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md), not drilled: no measured recovery time |
+| Upgrade and disaster recovery | Met | [Drilled](https://github.com/MicheleCampi/gke-llm-inference-platform/blob/main/docs/upgrade-and-dr.md#drill-9-november-2026) 9 November 2026: rebuild from Git, 46 min 11 s to the team model Ready; one drill, one region |
+| Failure-mode analysis | Met | [fmea.md](fmea.md), 10 modes, each with evidence and gap |
 | On-call | Open | Grafana-managed rules route through Grafana's built-in Alertmanager to one email contact point, `platform-oncall-email` ([ADR-0021](https://github.com/MicheleCampi/vllm-coldstart-operator/blob/main/docs/adr/0021-burn-rate-alerts-on-the-time-to-first-token.md)); no paging service, no rotation; the routing lives in Grafana Cloud, not in a repository |

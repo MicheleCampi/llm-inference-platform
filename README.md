@@ -11,7 +11,7 @@ The full write-up, with architecture, numbers and limits: [platform.md](conversa
 
 ## Status
 
-Platform layers: about 60% (19 done, 4 partial, of 35); foundations 22 of 22 ([status](docs/status.md), 10 November 2026).
+Platform layers: about 66% (21 done, 4 partial, of 35); foundations 22 of 22 ([status](docs/status.md), 11 November 2026).
 The count is kept in one place, [docs/status.md](docs/status.md), checked in CI; what is missing is listed in
 [What is not done yet](#what-is-not-done-yet).
 
@@ -133,6 +133,7 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
   (`VllmTtftObjectiveUnsupported`) instead of being silently ignored.
 - Showback is a query, not yet a number per team: [finops/](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/finops) splits billed cost by namespace; on the one billed run most cost is cluster cost not attributed to a pod.
 - Access per team: Roles per team are defined in the gke repository, not yet proven on a live cluster. See the [golden path](docs/golden-path.md).
+- Model delivery: a FleetService rendered by [model-promotion-bridge](https://github.com/MicheleCampi/model-promotion-bridge) from what MLflow promoted is accepted by the gke CI (schema and tenancy) and synced by the team's Argo CD app; proven in CI and on kind, not yet on a live GPU cluster.
 
 ## This repository
 

@@ -11,14 +11,14 @@ README stops matching it.
 |---|---|---|---|
 | Foundations: truth and verification | 22 | 22 | 0 |
 | Provisioning on two clouds | 3 | 2 | 0 |
-| Delivery: GitOps and models | 3 | 2 | 1 |
+| Delivery: GitOps and models | 3 | 3 | 0 |
 | Self-service contract | 8 | 3 | 2 |
 | Signals | 4 | 0 | 1 |
 | Security and tenancy | 2 | 2 | 0 |
 | Reliability | 8 | 8 | 0 |
 | Cost | 2 | 2 | 0 |
 | Operations and readiness | 5 | 2 | 0 |
-| **Platform layers (foundations excluded)** | **35** | **21** | **4** |
+| **Platform layers (foundations excluded)** | **35** | **22** | **3** |
 
 ## Billed GPU sessions
 

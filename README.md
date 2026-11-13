@@ -129,8 +129,7 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 - A production readiness review per component is not written; the platform has a
   [runbook](docs/runbook.md), a [failure-mode analysis](docs/fmea.md) and a [review](docs/prr.md).
 - Argo CD and the operator run as single replicas.
-- Only a 1 s time-to-first-token objective is enforced; any other value raises a ticket alert
-  (`VllmTtftObjectiveUnsupported`) instead of being silently ignored.
+- The time-to-first-token threshold per service (operator v0.11.0, gke `v0.8.5`, ADR-0027) is tested with promtool but not yet evaluated on live series; a value off vLLM's 22 bucket edges is measured at 1 s and raises a ticket.
 - Showback works per team from the billing export ([finops/](https://github.com/MicheleCampi/gke-llm-inference-platform/tree/main/finops); team-demo 68.8% of B-009, 50.4% of B-010, see [status](docs/status.md)); the declared budget is not yet compared with cost.
 - Access per team: Roles per team were verified on a live cluster (B-008); there is no per-client identity and no rate limit at the edge yet (R2 and D3 in the [threat model](docs/threat-model.md)). See the [golden path](docs/golden-path.md).
 - Model delivery was proven once on a live L4 (B-010, release `v0.8.3`): a FleetService rendered by [model-promotion-bridge](https://github.com/MicheleCampi/model-promotion-bridge) was synced by the team's Argo CD app and answered 200. Release `v0.8.4`, with the GPU node asked from zero for a FleetService, passes CI and has not yet run live.

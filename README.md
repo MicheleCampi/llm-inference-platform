@@ -7,11 +7,11 @@ observes and prices it, on GCP or AWS. Every claim is verifiable with a command.
 Designed, built and verified under simulated production load, with evidence in CI and one
 measured session on a real NVIDIA L4. It has not served real users.
 
-The full write-up, with architecture, numbers and limits: [platform.md](conversations/2026-11-03-platform-engineer/platform.md). C4 diagrams: [architecture.md](docs/architecture.md).
+The full write-up, with architecture, numbers and limits: [platform.md](conversations/2026-11-03-platform-engineer/platform.md). C4 diagrams: [architecture.md](docs/architecture.md); index of evidence: [production-architecture.md](docs/production-architecture.md).
 
 ## Status
 
-Platform layers: about 70% (23 done, 3 partial, of 35); foundations 22 of 22 ([status](docs/status.md), 13 November 2026).
+Platform layers: about 73% (24 done, 3 partial, of 35); foundations 22 of 22 ([status](docs/status.md), 13 November 2026).
 The count is kept in one place, [docs/status.md](docs/status.md), checked in CI; what is missing is listed in
 [What is not done yet](#what-is-not-done-yet).
 

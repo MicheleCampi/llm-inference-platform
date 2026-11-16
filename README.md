@@ -56,7 +56,7 @@ Platform core:
 | Repository | Role |
 |---|---|
 | [gke-llm-inference-platform](https://github.com/MicheleCampi/gke-llm-inference-platform) | Terraform and Argo CD on GKE: scale-to-zero L4 pool, External Secrets via Workload Identity, Alloy to Grafana Cloud. |
-| [vllm-coldstart-operator](https://github.com/MicheleCampi/vllm-coldstart-operator) | Kubernetes operator in Rust: VllmService and FleetService, placement, preemption, objectives, cost; 25 ADRs. |
+| [vllm-coldstart-operator](https://github.com/MicheleCampi/vllm-coldstart-operator) | Kubernetes operator in Rust: VllmService and FleetService, placement, preemption, objectives, cost; 27 ADRs. |
 | [eks-llm-inference-platform](https://github.com/MicheleCampi/eks-llm-inference-platform) | The AWS twin: Terraform and Argo CD on EKS deploying the same operator. |
 | [inference-platform-ci](https://github.com/MicheleCampi/inference-platform-ci) | Pinned tools and shared verification helpers used by the CI of every repository. |
 | [model-promotion-bridge](https://github.com/MicheleCampi/model-promotion-bridge) | Reads what MLflow promoted and emits the manifest that serves exactly that revision. |
@@ -139,6 +139,5 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 - `README.md`: this entry point.
 - `conversations/`: [platform.md](conversations/2026-11-03-platform-engineer/platform.md), the full write-up of the platform.
 - `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team, the [R6 report](docs/r6-report.md), the [postmortems](docs/postmortems/README.md) of real incidents, the [platform runbook](docs/runbook.md) and the [production readiness review](docs/prr.md).
-- `presentations/`: short guided tours of the platform (coming).
 
 The platform is under active development; what is missing is listed above.

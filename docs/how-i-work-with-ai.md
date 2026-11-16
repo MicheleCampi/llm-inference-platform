@@ -47,7 +47,7 @@ Review can miss things, so the repositories also refuse bad changes on their own
 - **Required checks before merge** on the default branches (eks: validate and a
   read-only `terraform plan`; gke: `validate` in the ruleset).
 - **Negative tests**: inputs that must be rejected, such as seven broken
-  manifests in gke CI, or an empty or open `public_access_cidrs` in eks
+  inputs in gke CI, or an empty or open `public_access_cidrs` in eks
   `terraform test`.
 - **Mutation checks**: a test is accepted only if breaking the code it guards
   makes it fail (examples in the [threat model](threat-model.md), rows S1, S4, I2).

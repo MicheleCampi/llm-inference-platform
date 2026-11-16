@@ -138,6 +138,6 @@ the EKS repository runs `terraform test` in CI with the same pinned tools.
 
 - `README.md`: this entry point.
 - `conversations/`: [platform.md](conversations/2026-11-03-platform-engineer/platform.md), the full write-up of the platform.
-- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team, the [R6 report](docs/r6-report.md), the [postmortems](docs/postmortems/README.md) of real incidents, the [platform runbook](docs/runbook.md) and the [production readiness review](docs/prr.md).
+- `docs/`: platform documentation, starting with the [threat model](docs/threat-model.md), the [golden path](docs/golden-path.md) of a new team, the [R6 report](docs/r6-report.md), the [postmortems](docs/postmortems/README.md) of real incidents, the [platform runbook](docs/runbook.md) and the [production readiness review](docs/prr.md). How the platform is built, AI-native with a human in the loop: [how I work with AI](docs/how-i-work-with-ai.md).
 
 The platform is under active development; what is missing is listed above.

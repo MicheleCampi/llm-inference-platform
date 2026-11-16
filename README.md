@@ -103,14 +103,14 @@ risk, and the document ends with a prioritised list of what to close next.
 
 Open items, as named in the threat model:
 
-- S4, partly mitigated: EKS nodes block the node IAM role from pods (IMDSv2, hop limit 1) and IRSA binds a role to one service account ([eks #5](https://github.com/MicheleCampi/eks-llm-inference-platform/pull/5)); tested offline, not applied to a live cluster.
+- S4, partly mitigated: EKS nodes block the node IAM role from pods (IMDSv2, hop limit 1) and IRSA binds a role to one service account ([eks #5](https://github.com/MicheleCampi/eks-llm-inference-platform/pull/5)); configured on every node of the live run of 15 November 2026, not yet demonstrated from a pod.
 - R2, not mitigated: one shared static key per vLLM service, so no per-client attribution.
   Next: per-client identity (priority 1).
 - D3, not mitigated: no rate limits or quotas, so one client can exhaust the GPU.
   Next: edge stack before any public exposure (priority 5).
 - I4, not assessed: the Grafana Cloud secret is only referenced; its handling is not yet reviewed.
 
-Last reviewed 31 October 2026; the threat model is reviewed on every security-relevant PR, and
+Last reviewed 16 November 2026 (EKS rows at release v2.2.9); the threat model is reviewed on every security-relevant PR, and
 CI fails if the counts above stop matching it.
 
 ## How to verify it yourself
